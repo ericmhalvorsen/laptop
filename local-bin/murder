@@ -1,0 +1,12 @@
+#!/bin/bash
+
+set -e
+
+local processes=$(ps -ef | grep "$1" | grep -v grep | awk "{print \$2}")
+if [ -n "$processes" ]; then
+  echo "Killing processes: $processes"
+  echo "$processes" | xargs kill -9
+  echo "Done."
+else
+  echo "No processes matching ''$1'' found."
+fi

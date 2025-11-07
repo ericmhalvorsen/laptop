@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -eq 0 ]]; then
+    echo "Usage: $(basename "$0") <gem-name>"
+    exit 1
+fi
+
+if ! command -v cursor &> /dev/null; then
+    echo "Error: 'cursor' command not found"
+    echo "Install it: Open Cursor → Cmd+Shift+P → 'Install command line tools'"
+    exit 1
+fi
+
+# Run bundle show interactively, capture to temp file
+tmpfile=$(mktemp)
+bundle show "$1" 2>&1 | tee "$tmpfile"
+
+# Get the last line that looks like a path, strip ANSI codes
+gem_path=$(grep "/" "$tmpfile" | grep -v "^[0-9] :" | tail -n 1 | sed -e 's/\x1b\[[0-9;]*[a-zA-Z]//g' -e "s/'$//" | xargs)
+rm "$tmpfile"
+
+# Open in cursor
+cursor "$gem_path"

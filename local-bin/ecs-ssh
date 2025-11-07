@@ -1,0 +1,70 @@
+#!/bin/bash
+
+set -e
+
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 <environment>"
+    echo "Example: $0 prod (or production)"
+    echo "Example: $0 service (or cs)"
+    echo "Example: $0 qa"
+    exit 1
+fi
+
+ENVIRONMENT=$1
+
+case $ENVIRONMENT in
+    prod|production)
+        CLUSTER="default-prod"
+        PROFILE="production"
+        SERVICE_NAME="default-prod-riskops-rails"
+        ;;
+    service|cs)
+        CLUSTER="default-cs"
+        PROFILE="customer-success"
+        SERVICE_NAME="default-cs-riskops-rails"
+        ;;
+    staging)
+	CLUSTER="default-staging"
+	PROFILE="lower-envs"
+	SERVICE_NAME="default-staging-riskops-mcp"
+	;;
+    qa)
+        CLUSTER="default-qa"
+        PROFILE="lower-envs"
+        SERVICE_NAME="default-qa-riskops-rails"
+        ;;
+    *)
+        echo "Error: Unknown environment '$ENVIRONMENT'"
+        echo "Supported environments: prod, qa"
+        exit 1
+        ;;
+esac
+
+echo "Connecting to $ENVIRONMENT environment..."
+echo "Fetching active task ID..."
+
+TASK_ID=$(aws ecs list-tasks \
+    --region us-east-1 \
+    --cluster $CLUSTER \
+    --service-name $SERVICE_NAME \
+    --desired-status RUNNING \
+    --profile $PROFILE \
+    --query 'taskArns[0]' \
+    --output text | sed 's/.*\///')
+
+if [ "$TASK_ID" == "None" ] || [ -z "$TASK_ID" ]; then
+    echo "Error: No running tasks found for rails service in $ENVIRONMENT"
+    exit 1
+fi
+
+echo "Found task ID: $TASK_ID"
+echo "Executing bash command..."
+
+aws ecs execute-command \
+    --region us-east-1 \
+    --cluster $CLUSTER \
+    --task $TASK_ID \
+    --container rails \
+    --command "/bin/bash" \
+    --interactive \
+    --profile $PROFILE
