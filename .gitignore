@@ -12,6 +12,8 @@ vault-*.tar
 backup-info.txt
 *-backup-*/
 
+.specstory
+
 # Legacy shell scripts (kept for reference)
 /legacy/
 

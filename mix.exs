@@ -8,7 +8,19 @@ defmodule Vault.MixProject do
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      escript: escript()
+      escript: escript(),
+      test_coverage: [tool: ExCoveralls]
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test
+      ]
     ]
   end
 
@@ -31,7 +43,8 @@ defmodule Vault.MixProject do
   defp deps do
     [
       {:owl, "~> 0.13"},
-      {:ucwidth, "~> 0.2"}
+      {:ucwidth, "~> 0.2"},
+      {:excoveralls, "~> 0.18", only: :test}
     ]
   end
 end
