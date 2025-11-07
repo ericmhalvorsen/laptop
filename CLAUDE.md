@@ -7,16 +7,16 @@
 ### Key Objectives
 
 1. **Modern CLI Experience**: Use Elixir with Owl framework for beautiful, interactive interfaces
-2. **Separation of Concerns**:
-   - Git repo contains lightweight CLI tool and documentation
-   - Vault directory (not in git) contains all backup data
-3. **Comprehensive Backup**: Dotfiles, configs, applications, browser data, Obsidian notes, and home directories
+2. **Two-Tier Backup System**:
+   - **Git Repo** (Tier 1): Lightweight configs committed to GitHub (dotfiles, app configs, scripts, Homebrew lists)
+   - **Vault Directory** (Tier 2): Heavy data NOT in git (apps, browser data, home directories, sensitive files)
+3. **Flexible Restore**: Can restore from git alone (data-less) or git + vault (full restore)
 4. **Full Test Coverage**: All functionality must be tested with ExUnit
 5. **User-Friendly**: Progress bars, colored output, interactive prompts, helpful error messages
 
 ## Architecture
 
-### Repository Structure
+### Repository Structure (Committed to Git)
 ```
 laptop/                          # Git repository
 ├── lib/vault/
@@ -27,12 +27,17 @@ laptop/                          # Git repository
 │   │   ├── status.ex            # Status command
 │   │   └── ...
 │   ├── backup/
-│   │   ├── dotfiles.ex
-│   │   ├── homebrew.ex
-│   │   ├── apps.ex
-│   │   └── home_dirs.ex
+│   │   ├── dotfiles.ex          # Backs up to repo
+│   │   ├── homebrew.ex          # Backs up to repo
+│   │   ├── apps.ex              # Backs up to vault
+│   │   ├── browser.ex           # Backs up to vault
+│   │   └── home_dirs.ex         # Backs up to vault
 │   └── restore/
 │       └── ...
+├── dotfiles/                    # COMMITTED - Dotfiles backed up here
+├── config/                      # COMMITTED - App configs backed up here
+├── local-bin/                   # COMMITTED - Scripts backed up here
+├── brew/                        # COMMITTED - Homebrew lists backed up here
 ├── test/
 ├── mix.exs
 ├── PROGRESS.md
@@ -41,16 +46,17 @@ laptop/                          # Git repository
 
 ### Vault Directory (NOT in git)
 ```
-~/VaultBackup/                   # User-specified location
-├── dotfiles/
-├── configs/
-├── local-bin/
-├── apps/
-├── homebrew/
-├── browser/
-├── obsidian/
-├── home/
-└── sensitive/
+~/VaultBackup/                   # User-specified location (external drive, NAS, etc.)
+├── apps/                        # Application installers (DMGs)
+├── browser/                     # Browser data (Brave, Chrome)
+├── app-data/                    # Application data
+├── obsidian/                    # Obsidian vaults
+├── home/                        # Home directory data
+│   ├── Documents/
+│   ├── Downloads/
+│   ├── Pictures/
+│   └── Desktop/
+└── sensitive/                   # Sensitive files (.netrc, SSH keys, etc.)
 ```
 
 ## Technology Stack
@@ -595,20 +601,22 @@ end
 
 ## Critical Backup Components
 
-Per user requirements, these are HIGH PRIORITY:
+### Tier 1: Lightweight (Committed to Git Repo)
 
-1. **Dotfiles**: `.zshrc`, `.gitconfig`, `.vimrc`, etc.
-2. **Scripts**: `~/.local/bin/*`
-3. **ZSH & oh-my-zsh**: Config and plugins
-4. **Obsidian**: Vault backup (auto-detect location)
-5. **Yaak**: API testing tool
-6. **Homebrew**: Complete package list
-7. **RustDesk**: Remote desktop
-8. **Docker**: For Mac
-9. **Warp**: Terminal app + settings + themes
-10. **Claude Code**: `.claude/` config
-11. **Browser data**: Brave and Chrome
-12. **Home directories**: Documents, Downloads, Pictures, Desktop
+1. **Dotfiles**: `.zshrc`, `.gitconfig`, `.vimrc`, etc. → `dotfiles/`
+2. **Scripts**: `~/.local/bin/*` → `local-bin/`
+3. **App Configs**: Claude Code, Warp, mise, git, etc. → `config/`
+4. **Homebrew**: Complete package lists, Brewfile → `brew/`
+5. **ZSH Config**: Oh-my-zsh settings (part of dotfiles)
+
+### Tier 2: Heavy Data (Vault Directory, NOT in git)
+
+6. **Applications**: Yaak, RustDesk, Docker, Warp installers → `vault/apps/`
+7. **Browser Data**: Brave and Chrome (history, bookmarks, etc.) → `vault/browser/`
+8. **Obsidian**: Vault files → `vault/obsidian/`
+9. **Home Directories**: Documents, Downloads, Pictures, Desktop → `vault/home/`
+10. **Application Data**: App-specific data → `vault/app-data/`
+11. **Sensitive Files**: `.netrc`, SSH keys, GPG keys → `vault/sensitive/`
 
 ## Warp Configuration Deep Dive
 

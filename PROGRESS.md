@@ -17,14 +17,18 @@ Transform the current shell script-based Mac setup tool into a modern CLI applic
 
 ### Target State
 - **Vault CLI**: Modern Elixir-based CLI tool (using Owl framework)
-- **Git Repo**: Contains only the CLI tool, scripts, and documentation
-- **Vault Directory**: Separate storage for all backup data (not in git)
-  - Dotfiles
+- **Git Repo**: Contains CLI tool + lightweight configs (committed to git)
+  - Dotfiles (.zshrc, .gitconfig, etc.)
+  - App configs (.config directories)
+  - Local scripts (.local/bin)
+  - Homebrew package lists
+- **Vault Directory**: Separate storage for heavy data (NOT in git)
   - Application installers/wrappers
   - Browser data
+  - Application data
   - Obsidian notes
-  - Home directory data (Documents, Downloads, Pictures, etc.)
-  - Git-ignored sensitive files
+  - Home directory data (Documents, Downloads, Pictures, Desktop, etc.)
+  - Sensitive files (.netrc, SSH keys, GPG keys)
 
 ## Progress Tracking
 
@@ -252,22 +256,27 @@ Transform the current shell script-based Mac setup tool into a modern CLI applic
 ## Commands Design
 
 ```bash
-# Save current system to vault
+# Save current system
 vault save [--vault-path PATH] [--full] [--exclude PATTERN]
+  # Saves lightweight configs to git repo (dotfiles, configs, brew)
+  # Saves heavy data to vault directory (apps, browser, home dirs)
 
-# Restore from vault to current system
+# Restore from backups
 vault restore [--vault-path PATH] [--dry-run] [--component COMPONENT]
+  # Without --vault-path: Restore only git repo configs (data-less)
+  # With --vault-path: Restore both repo configs + vault data
 
 # Show vault status
 vault status [--vault-path PATH]
+  # Shows what's in repo vs what's in vault
 
-# Compare current system to vault
+# Compare current system to backups
 vault diff [--vault-path PATH]
 
-# List vault contents
+# List backup contents
 vault list [--vault-path PATH]
 
-# Verify vault integrity
+# Verify backup integrity
 vault verify [--vault-path PATH]
 
 # Initialize new vault
@@ -300,7 +309,7 @@ backup_existing = true
 ## File Structure
 
 ```
-laptop/                          # Git repository
+laptop/                          # Git repository (committed to GitHub)
 ├── lib/
 │   └── vault/
 │       ├── cli.ex              # Main CLI entry
@@ -310,12 +319,29 @@ laptop/                          # Git repository
 │       │   ├── status.ex       # Status command
 │       │   └── ...
 │       ├── backup/
-│       │   ├── dotfiles.ex
-│       │   ├── homebrew.ex
-│       │   ├── apps.ex
-│       │   └── home_dirs.ex
+│       │   ├── dotfiles.ex     # Backs up to repo
+│       │   ├── homebrew.ex     # Backs up to repo
+│       │   ├── apps.ex         # Backs up to vault
+│       │   ├── browser.ex      # Backs up to vault
+│       │   └── home_dirs.ex    # Backs up to vault
 │       └── restore/
 │           └── ...
+├── dotfiles/                    # COMMITTED - Backed up dotfiles
+│   ├── .zshrc
+│   ├── .gitconfig
+│   └── ...
+├── config/                      # COMMITTED - App configs
+│   ├── claude/
+│   ├── warp/
+│   ├── mise/
+│   └── ...
+├── local-bin/                   # COMMITTED - Custom scripts
+│   ├── claude-wrapper
+│   └── ...
+├── brew/                        # COMMITTED - Homebrew lists
+│   ├── Brewfile
+│   ├── formulas.txt
+│   └── casks.txt
 ├── test/
 │   └── vault/
 │       ├── commands/
@@ -331,31 +357,28 @@ laptop/                          # Git repository
     └── setup.sh
 
 ~/VaultBackup/                   # Vault directory (NOT in git)
-├── dotfiles/
-│   ├── .zshrc
-│   └── ...
-├── configs/
-│   ├── claude/
-│   ├── warp/
-│   └── ...
-├── local-bin/
-├── apps/
+├── apps/                        # Application installers
 │   ├── Yaak.dmg
-│   └── ...
-├── homebrew/
-│   └── Brewfile
-├── browser/
+│   ├── RustDesk.dmg
+│   ├── Docker.dmg
+│   └── Warp.dmg
+├── browser/                     # Browser data
 │   ├── brave/
 │   └── chrome/
-├── obsidian/
+├── app-data/                    # Application data
+│   └── ...
+├── obsidian/                    # Obsidian vaults
 │   └── YourVault/
-├── home/
+├── home/                        # Home directory data
 │   ├── Documents/
 │   ├── Downloads/
+│   ├── Pictures/
+│   ├── Desktop/
 │   └── ...
-└── sensitive/
+└── sensitive/                   # Sensitive files
     ├── .netrc
     ├── ssh-keys/
+    ├── gpg-keys/
     └── ...
 ```
 

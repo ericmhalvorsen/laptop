@@ -8,15 +8,11 @@ erl_crash.dump
 *.ez
 vault-*.tar
 
-# Backup data (not committed - goes in vault directory instead)
-/dotfiles/
-/config/
-/local-bin/
-/brew/
+# Backup metadata (generated during backup)
 backup-info.txt
 *-backup-*/
 
-# Legacy shell scripts
+# Legacy shell scripts (kept for reference)
 /legacy/
 
 # macOS
