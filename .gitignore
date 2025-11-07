@@ -1,26 +1,55 @@
-# Backup directories created during setup
-*-backup-*/
+# Elixir/Mix build artifacts
+/_build/
+/cover/
+/deps/
+/doc/
+/tmp/
+erl_crash.dump
+*.ez
+vault-*.tar
+
+# Backup data (not committed - goes in vault directory instead)
+/dotfiles/
+/config/
+/local-bin/
+/brew/
 backup-info.txt
+*-backup-*/
+
+# Legacy shell scripts
+/legacy/
 
 # macOS
 .DS_Store
 .AppleDouble
 .LSOverride
-
-# Thumbnails
 ._*
 
-# Files that might contain sensitive information
+# Sensitive files (manage separately)
 .netrc
 anthropic_key.sh
+*.key
+*.pem
+id_rsa*
+id_ed25519*
 
-# Temporary files
-*.swp
-*.swo
-*~
+# History files
+.bash_history
+.zsh_history
+.irb_history
+.python_history
+.psql_history
+.rediscli_history
 
-# Log files
-*.log
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
 
 # Node
 node_modules/
@@ -33,26 +62,3 @@ __pycache__/
 venv/
 .venv/
 
-# IDE
-.vscode/
-.idea/
-*.sublime-*
-
-# History files (may contain sensitive commands)
-.bash_history
-.zsh_history
-.irb_history
-.python_history
-.psql_history
-.rediscli_history
-
-# SSH keys and GPG keys (never commit these!)
-id_rsa*
-id_ed25519*
-*.key
-*.pem
-
-# Environment files
-.env
-.env.local
-.env.*.local

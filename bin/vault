@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# Wrapper script to run vault escript with mise-managed Elixir/Erlang
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+cd "$SCRIPT_DIR"
+mise exec -- "$SCRIPT_DIR/vault" "$@"

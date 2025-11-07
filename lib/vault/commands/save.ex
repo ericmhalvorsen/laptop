@@ -1,0 +1,39 @@
+defmodule Vault.Commands.Save do
+  @moduledoc """
+  Command to backup current macOS configuration to the vault.
+  """
+
+  def run(_args, opts) do
+    vault_path = get_vault_path(opts)
+
+    Owl.IO.puts([
+      Owl.Data.tag("\n📦 Vault Save", :cyan),
+      "\n\n",
+      "Vault path: ",
+      Owl.Data.tag(vault_path, :yellow),
+      "\n"
+    ])
+
+    # TODO: Implement actual backup logic
+    Owl.Box.new([
+      Owl.Data.tag("🚧 Coming Soon!", :yellow),
+      "\n\n",
+      "The save command will backup:\n",
+      "  • Dotfiles\n",
+      "  • Homebrew packages\n",
+      "  • Application configurations\n",
+      "  • Browser data\n",
+      "  • Obsidian vaults\n",
+      "  • Home directories\n"
+    ])
+    |> Owl.IO.puts()
+  end
+
+  defp get_vault_path(opts) do
+    opts[:vault_path] || get_default_vault_path()
+  end
+
+  defp get_default_vault_path do
+    Path.join(System.user_home!(), "VaultBackup")
+  end
+end
