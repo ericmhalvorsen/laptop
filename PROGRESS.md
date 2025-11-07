@@ -92,6 +92,12 @@ Transform the current shell script-based Mac setup tool into a modern CLI applic
   - [x] Extensible for other apps
   - [x] Full test coverage (16 tests, 92.8% coverage)
   - [x] Integrated into save command
+
+- Before continuing - for configs and dotfiles, we should scan the home directory to
+find candidates. I want new stuff to get saved next time I run the script. So like, it
+will look at what I have and back that up, and we can use a .ignore file type thing to
+prevent stuff we might not want
+
 - [ ] Implement Homebrew backup
   - [ ] Export formulas list
   - [ ] Export casks list
