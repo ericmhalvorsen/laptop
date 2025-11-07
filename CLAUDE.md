@@ -703,6 +703,159 @@ When working on this project:
 9. **Consider macOS specifics** (paths, apps, plist files)
 10. **Security first**: Never commit vault data, be careful with sensitive files
 
+## Portable Executable Options
+
+### Current: Escript
+- **Pros**: Simple, built into Elixir, small file size (~1.5MB for Vault)
+- **Cons**: Requires Erlang/Elixir installed on target machine, needs `escript` in PATH
+- **Best for**: Development, systems with Erlang already installed
+
+### Option 1: Burrito (Recommended for Distribution)
+
+**What it is**: Wraps your app + Erlang runtime into a single, self-extracting executable
+
+**How it works**:
+1. Bundles compiled BEAM code + ERTS (Erlang Runtime System) into gzip archive
+2. Embeds archive into a Zig-compiled wrapper executable
+3. On first run, extracts to cache directory (~/.cache on macOS)
+4. Subsequent runs reuse cached extraction (fast startup)
+5. Re-extracts only when app version changes
+
+**Installation**:
+```elixir
+# mix.exs
+def deps do
+  [
+    {:burrito, "~> 1.0"},
+    # ... other deps
+  ]
+end
+
+def releases do
+  [
+    vault: [
+      steps: [:assemble, &Burrito.wrap/1],
+      burrito: [
+        targets: [
+          macos_intel: [os: :darwin, cpu: :x86_64],
+          macos_arm: [os: :darwin, cpu: :aarch64],
+          linux: [os: :linux, cpu: :x86_64],
+          windows: [os: :windows, cpu: :x86_64]
+        ]
+      ]
+    ]
+  ]
+end
+
+# Add to project/0
+releases: releases()
+```
+
+**Building**:
+```bash
+# Build all targets
+MIX_ENV=prod mix release
+
+# Build specific target
+BURRITO_TARGET=macos_arm MIX_ENV=prod mix release
+
+# Output in burrito_out/
+```
+
+**Entry Point Requirements**:
+```elixir
+# Must have application entry point
+def application do
+  [mod: {Vault.Application, []}]
+end
+
+# In your Application module
+def start(_type, _args) do
+  # Get CLI args using Burrito's helper
+  args = Burrito.Util.Args.get_arguments()
+
+  # Process args and run CLI
+  Vault.CLI.main(args)
+
+  # Must call System.halt or supervisor will keep running
+  System.halt(0)
+end
+```
+
+**Important Gotchas**:
+
+1. **Args Handling**: `System.argv()` returns empty! Use `Burrito.Util.Args.get_arguments()`
+
+2. **Version Caching**: Burrito caches by version. When rebuilding same version:
+   ```bash
+   # Clear cache
+   ./burrito_out/vault maintenance uninstall
+
+   # Or increment version in mix.exs
+   ```
+
+3. **macOS Code Signing**: Unsigned binaries trigger Gatekeeper warnings. Options:
+   - Sign with Apple Developer certificate
+   - Users must right-click → Open on first run
+   - Or disable Gatekeeper (not recommended)
+
+4. **Dialyzer Warnings**: Using `System.halt(0)` causes "no local return" warning:
+   ```elixir
+   @dialyzer {:nowarn_function, start: 2}
+   ```
+
+**File Size**:
+- Includes full Erlang runtime (~50-80MB compressed)
+- Final binary typically 20-40MB (varies by OTP version and app size)
+- Much larger than escript, but truly portable
+
+**Pros**:
+- ✅ No Erlang/Elixir required on target machine
+- ✅ Single file distribution
+- ✅ Cross-compile from macOS/Linux to all platforms
+- ✅ Fast execution after first run (cached)
+- ✅ Actively maintained (v1.4.0 as of 2024)
+
+**Cons**:
+- ❌ Large file size (includes entire Erlang runtime)
+- ❌ Slower first run (extraction time)
+- ❌ macOS requires code signing or Gatekeeper exemption
+- ❌ More complex build process
+- ❌ Must use `Burrito.Util.Args` instead of `System.argv()`
+
+**Best for**: Distributing to users without Erlang, air-gapped systems, cross-platform distribution
+
+### Option 2: Bakeware (NOT Recommended)
+
+- **Status**: Archived September 2024 (no longer maintained)
+- **What it was**: Similar to Burrito but older
+- **Recommendation**: Use Burrito instead
+
+### Recommendation for Vault
+
+**For Development**: Use escript with mise (current setup)
+- Fast builds
+- Small size
+- Easy debugging
+- Works great with mise-managed Elixir
+
+**For Distribution**: Add Burrito as optional build target
+- Create Burrito binaries for releases
+- Users can download single executable
+- No Erlang installation required
+
+**Hybrid Approach**:
+```bash
+# Development (fast)
+mix escript.build
+./bin/vault save
+
+# Distribution (portable)
+MIX_ENV=prod mix release
+./burrito_out/vault save
+```
+
 ## Update Log
 
 - **2025-11-06**: Initial CLAUDE.md created with Owl research and best practices
+- **2025-11-06**: Added Burrito portable executable documentation

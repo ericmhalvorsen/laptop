@@ -46,6 +46,23 @@ Transform the current shell script-based Mac setup tool into a modern CLI applic
 - [x] Build and test escript
 - [x] Create wrapper script for easy execution
 
+### Phase 2.5: Portable Executable Research ✅
+- [x] Research Burrito for self-contained executables
+- [x] Research Bakeware for single-file deployments
+- [x] Evaluate trade-offs (file size, compatibility, ease of use)
+- [x] Document portable build process in CLAUDE.md
+- [ ] (Optional) Test building portable executable with Burrito
+- [ ] (Optional) Add Burrito as alternative build target
+
+**Decision**: Keep escript for development (fast, small). Add Burrito as optional distribution target later.
+
+**Key Findings**:
+- Burrito creates truly portable binaries (no Erlang required)
+- File size: ~20-40MB (vs 1.5MB escript) due to bundled Erlang runtime
+- Requires code signing for macOS or users get Gatekeeper warnings
+- Great for distribution, but escript better for development
+- Hybrid approach: escript for dev, Burrito for releases
+
 ### Phase 3: Testing Infrastructure
 - [ ] Set up ExUnit testing framework
 - [ ] Create test helpers and fixtures
@@ -405,8 +422,9 @@ laptop/                          # Git repository
 **Completed**:
 - ✅ Phase 1: Planning, documentation, and Owl research
 - ✅ Phase 2: CLI Framework Setup - Working escript with beautiful Owl UI!
+- ✅ Phase 2.5: Portable Executable Research - Documented Burrito for future releases
 
 **Next Steps**:
 - Set up ExUnit testing framework
 - Create test helpers and fixtures
-- Begin implementing actual backup functionality
+- Begin implementing actual backup functionality (dotfiles, homebrew, etc.)
