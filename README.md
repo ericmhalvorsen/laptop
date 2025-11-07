@@ -15,12 +15,17 @@ Vault uses a **two-tier backup system**:
 - Can restore from GitHub alone (data-less restore)
 
 ### Tier 2: Heavy Data (Vault Directory)
-- 📦 Application installers (DMGs)
 - 🌐 Browser data (Brave, Chrome)
+- ⚙️ Application settings/data (post-install)
 - 📝 Obsidian vaults
 - 📁 Home directories (Documents, Downloads, Pictures, Desktop)
 - 🔐 Sensitive files (`.netrc`, SSH keys)
 - **NOT in git** - stored separately (external drive, NAS, etc.)
+
+### Applications (Installed from Latest)
+- 📦 Apps installed from latest sources (Homebrew, GitHub, websites)
+- ✅ Ensures you always get the latest version
+- ⚙️ Settings restored from vault after installation
 
 ## Quick Start
 
@@ -90,12 +95,14 @@ mise exec -- mix escript.build
 
 ### Tier 2: In Vault Directory (NOT in Git)
 
-**Applications** (`vault/apps/`):
-- Yaak, RustDesk, Docker, Warp installers
-
 **Browser Data** (`vault/browser/`):
-- Brave browser data
-- Chrome browser data
+- Brave browser data (history, bookmarks, extensions)
+- Chrome browser data (history, bookmarks, extensions)
+
+**Application Settings** (`vault/app-data/`):
+- Warp settings (post-install)
+- Yaak settings (post-install)
+- Other app-specific configs
 
 **Obsidian** (`vault/obsidian/`):
 - Your Obsidian vaults
@@ -110,6 +117,18 @@ mise exec -- mix escript.build
 - `.netrc`
 - SSH keys
 - GPG keys
+
+### Applications (Installed from Latest Sources)
+
+Applications are **NOT backed up** as installers. Instead, they're installed from latest sources:
+
+- **Homebrew Apps**: Installed via `brew install --cask`
+- **Yaak**: Downloaded from latest GitHub release
+- **RustDesk**: Downloaded from latest GitHub release
+- **Docker**: Downloaded from Docker website
+- **Warp**: Downloaded from Warp website
+
+Settings are restored from `vault/app-data/` after installation.
 
 ## Restore Scenarios
 
@@ -144,7 +163,8 @@ cd ~/code/laptop
 #   ✅ App configs
 #   ✅ Scripts
 #   ✅ Homebrew packages
-#   ✅ Applications
+#   ✅ Install applications (latest versions)
+#   ✅ Application settings
 #   ✅ Browser data
 #   ✅ Obsidian
 #   ✅ Home directories

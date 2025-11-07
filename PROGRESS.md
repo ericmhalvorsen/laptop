@@ -23,12 +23,14 @@ Transform the current shell script-based Mac setup tool into a modern CLI applic
   - Local scripts (.local/bin)
   - Homebrew package lists
 - **Vault Directory**: Separate storage for heavy data (NOT in git)
-  - Application installers/wrappers
-  - Browser data
-  - Application data
+  - Browser data (settings, history, bookmarks)
+  - Application data (app-specific settings)
   - Obsidian notes
   - Home directory data (Documents, Downloads, Pictures, Desktop, etc.)
   - Sensitive files (.netrc, SSH keys, GPG keys)
+- **Applications**: Install from latest sources (Homebrew, GitHub releases, etc.)
+  - No app installer backups - always get latest version
+  - Restore application settings/configs from vault
 
 ## Progress Tracking
 
@@ -357,15 +359,12 @@ laptop/                          # Git repository (committed to GitHub)
     └── setup.sh
 
 ~/VaultBackup/                   # Vault directory (NOT in git)
-├── apps/                        # Application installers
-│   ├── Yaak.dmg
-│   ├── RustDesk.dmg
-│   ├── Docker.dmg
-│   └── Warp.dmg
 ├── browser/                     # Browser data
 │   ├── brave/
 │   └── chrome/
-├── app-data/                    # Application data
+├── app-data/                    # Application settings/data
+│   ├── warp/                    # Warp settings (post-install)
+│   ├── yaak/                    # Yaak settings (post-install)
 │   └── ...
 ├── obsidian/                    # Obsidian vaults
 │   └── YourVault/
@@ -380,6 +379,8 @@ laptop/                          # Git repository (committed to GitHub)
     ├── ssh-keys/
     ├── gpg-keys/
     └── ...
+
+Note: Applications installed from latest sources, NOT backed up
 ```
 
 ## Notes & Decisions

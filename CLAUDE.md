@@ -47,9 +47,8 @@ laptop/                          # Git repository
 ### Vault Directory (NOT in git)
 ```
 ~/VaultBackup/                   # User-specified location (external drive, NAS, etc.)
-├── apps/                        # Application installers (DMGs)
 ├── browser/                     # Browser data (Brave, Chrome)
-├── app-data/                    # Application data
+├── app-data/                    # Application settings/data (post-install)
 ├── obsidian/                    # Obsidian vaults
 ├── home/                        # Home directory data
 │   ├── Documents/
@@ -58,6 +57,8 @@ laptop/                          # Git repository
 │   └── Desktop/
 └── sensitive/                   # Sensitive files (.netrc, SSH keys, etc.)
 ```
+
+**Note**: Applications are installed from latest sources (Homebrew, GitHub releases), NOT backed up as installers.
 
 ## Technology Stack
 
@@ -611,12 +612,20 @@ end
 
 ### Tier 2: Heavy Data (Vault Directory, NOT in git)
 
-6. **Applications**: Yaak, RustDesk, Docker, Warp installers → `vault/apps/`
-7. **Browser Data**: Brave and Chrome (history, bookmarks, etc.) → `vault/browser/`
+6. **Browser Data**: Brave and Chrome (history, bookmarks, etc.) → `vault/browser/`
+7. **Application Data**: App-specific settings (post-install) → `vault/app-data/`
 8. **Obsidian**: Vault files → `vault/obsidian/`
 9. **Home Directories**: Documents, Downloads, Pictures, Desktop → `vault/home/`
-10. **Application Data**: App-specific data → `vault/app-data/`
-11. **Sensitive Files**: `.netrc`, SSH keys, GPG keys → `vault/sensitive/`
+10. **Sensitive Files**: `.netrc`, SSH keys, GPG keys → `vault/sensitive/`
+
+### Applications (Installed from Latest, NOT Backed Up)
+
+- **Yaak**: Download latest from GitHub releases
+- **RustDesk**: Download latest from GitHub releases
+- **Docker**: Download latest from Docker website
+- **Warp**: Download latest from Warp website
+- **Homebrew Apps**: Install via `brew install --cask`
+- **Settings**: Restored from `vault/app-data/` after installation
 
 ## Warp Configuration Deep Dive
 
