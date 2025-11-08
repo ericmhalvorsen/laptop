@@ -5,6 +5,7 @@ defmodule Vault.Commands.Save do
 
   alias Vault.Backup.Dotfiles
   alias Vault.Backup.Config
+  alias Vault.Backup.Homebrew
   alias Vault.Utils.FileUtils
 
   def run(_args, opts) do
@@ -29,6 +30,9 @@ defmodule Vault.Commands.Save do
     # Backup configs to repo
     backup_configs(home_dir, repo_dir)
 
+    # Backup Homebrew packages to repo
+    backup_homebrew(repo_dir)
+
     # Show success summary
     Owl.Box.new([
       Owl.Data.tag("✓ Backup Complete!", :green),
@@ -39,11 +43,43 @@ defmodule Vault.Commands.Save do
       Owl.Data.tag("  ✓ Local scripts", :green),
       "\n",
       Owl.Data.tag("  ✓ Configuration", :green),
+      "\n",
+      Owl.Data.tag("  ✓ Homebrew", :green),
       "\n\n",
       Owl.Data.tag("Coming soon:", :yellow),
-      " Homebrew, Browser, Home dirs, etc.\n"
+      " Browser, Home dirs, etc.\n"
     ])
     |> Owl.IO.puts()
+  end
+
+  defp backup_homebrew(repo_dir) do
+    Owl.IO.puts(["\n", Owl.Data.tag("→ Backing up Homebrew packages...", :cyan)])
+
+    case Homebrew.backup(repo_dir) do
+      {:ok, result} ->
+        Owl.IO.puts([
+          "  ",
+          Owl.Data.tag("✓", :green),
+          " Brewfile created"
+        ])
+
+        Owl.IO.puts([
+          "    ",
+          Owl.Data.tag("#{result.formulas}", :cyan),
+          " formulas, ",
+          Owl.Data.tag("#{result.casks}", :cyan),
+          " casks, ",
+          Owl.Data.tag("#{result.taps}", :cyan),
+          " taps"
+        ])
+
+      {:error, reason} ->
+        Owl.IO.puts([
+          "  ",
+          Owl.Data.tag("✗", :red),
+          " Failed: #{reason}"
+        ])
+    end
   end
 
   defp backup_configs(home_dir, repo_dir) do
