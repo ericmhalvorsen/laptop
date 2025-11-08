@@ -1,0 +1,40 @@
+version: 1
+
+defaults:
+  installers_dir: "~/Installers"
+
+brew:
+  formulas:
+    - neovim
+    - ollama
+  casks:
+    - ghostty
+    - warp
+    - brave-browser
+    - google-chrome
+    - visual-studio-code
+    - cursor
+    - windsurf
+    - docker
+    - rustdesk
+    - audacity
+    - yaak
+
+direct_download:
+  - name: Postgres.app
+    id: postgres-app
+    strategy: dmg_app
+    url: "latest:postgresapp"
+    app_name: "Postgres.app"
+    bundle_id: "com.postgresapp.Postgres2"
+
+local_pkg:
+  - { name: Falcon, id: falcon, pkg: "{installers}/Falcon.pkg", requires_sudo: true }
+  - { name: NordLayer, id: nordlayer, pkg: "{installers}/NordLayer.pkg", requires_sudo: true }
+
+local_dmg:
+  - name: Little Snitch
+    id: little-snitch
+    dmg: "{installers}/LittleSnitch*.dmg"
+    app_name: "Little Snitch.app"
+    optional: true

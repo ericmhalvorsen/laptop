@@ -1,0 +1,291 @@
+defmodule Vault.Commands.Install do
+  @moduledoc """
+  Install applications defined in config/apps.yaml.
+  """
+
+  def run(_args, opts) do
+    manifest = load_manifest()
+
+    Owl.IO.puts([
+      Owl.Data.tag("\n📦 App Installation", :cyan),
+      "\n\n",
+      "Manifest: ",
+      Owl.Data.tag("config/apps.yaml", :yellow),
+      "\n"
+    ])
+
+    install_brew(manifest, opts)
+    install_local_pkgs(manifest, opts)
+    install_local_dmgs(manifest, opts)
+    handle_direct_downloads(manifest, opts)
+
+    Owl.IO.puts(["\n", Owl.Data.tag("✓ Install complete", :green), "\n"])
+  end
+
+  defp load_manifest do
+    path = Path.expand("config/apps.yaml", File.cwd!())
+
+    case YamlElixir.read_from_file(path) do
+      {:ok, doc} -> doc
+      {:error, reason} ->
+        Owl.IO.puts([Owl.Data.tag("✗ Failed to read config/apps.yaml: ", :red), inspect(reason)])
+        System.halt(1)
+    end
+  end
+
+  defp install_brew(%{"brew" => brew} = _manifest, opts) when is_map(brew) do
+    dry = opts[:dry_run] == true
+
+    brewfile = Path.expand("brew/Brewfile", File.cwd!())
+
+    cond do
+      File.exists?(brewfile) ->
+        Owl.IO.puts(["\n", Owl.Data.tag("▶ Installing via Brewfile", :cyan), "\n"])
+        brew_bundle(brewfile, dry)
+
+      true ->
+        formulas = Map.get(brew, "formulas", [])
+        casks = Map.get(brew, "casks", [])
+
+        if formulas != [] do
+          Owl.IO.puts(["\n", Owl.Data.tag("▶ Installing brew formulas", :cyan), "\n"])
+          Enum.each(formulas, fn f -> brew_install(["install", f], dry) end)
+        end
+
+        if casks != [] do
+          Owl.IO.puts(["\n", Owl.Data.tag("▶ Installing brew casks", :cyan), "\n"])
+          Enum.each(casks, fn c -> brew_install(["install", "--cask", c], dry) end)
+        end
+    end
+  end
+
+  defp install_brew(_manifest, _opts), do: :ok
+
+  defp brew_install(args, true) do
+    Owl.IO.puts(["  ", Owl.Data.tag("dry-run:", :light_black), " brew ", Enum.join(args, " ")])
+  end
+
+  defp brew_install(args, false) do
+    case System.cmd("brew", args, into: IO.stream(:stdio, :line)) do
+      {_out, 0} -> :ok
+      {out, code} -> Owl.IO.puts([Owl.Data.tag("✗ brew failed (#{code})\n", :red), out])
+    end
+  end
+
+  defp brew_bundle(file, true) do
+    Owl.IO.puts(["  ", Owl.Data.tag("dry-run:", :light_black), " brew bundle --file=", file])
+  end
+
+  defp brew_bundle(file, false) do
+    case System.cmd("brew", ["bundle", "--file=" <> file], into: IO.stream(:stdio, :line)) do
+      {_out, 0} -> :ok
+      {out, code} -> Owl.IO.puts([Owl.Data.tag("✗ brew bundle failed (#{code})\n", :red), out])
+    end
+  end
+
+  defp install_local_pkgs(%{"local_pkg" => pkgs} = manifest, opts) when is_list(pkgs) do
+    dry = opts[:dry_run] == true
+    installers_dir = resolve_installers_dir(manifest, opts)
+
+    Owl.IO.puts(["\n", Owl.Data.tag("▶ Installing local .pkg installers", :cyan), "\n"])
+
+    Enum.each(pkgs, fn item ->
+      name = item_name(item)
+      requires_sudo = truthy(item["requires_sudo"])
+      optional = truthy(item["optional"])
+
+      pkg_pattern =
+        item["pkg"]
+        |> to_string()
+        |> String.replace("{installers}", installers_dir)
+        |> Path.expand()
+
+      candidates = Path.wildcard(pkg_pattern)
+
+      case candidates do
+        [path | _] -> run_pkg(name, path, requires_sudo, dry)
+        [] ->
+          msg = "Missing installer for #{name} at #{pkg_pattern}"
+          if optional do
+            Owl.IO.puts([Owl.Data.tag("! ", :yellow), msg])
+          else
+            Owl.IO.puts([Owl.Data.tag("! ", :yellow), msg])
+          end
+      end
+    end)
+  end
+
+  defp install_local_pkgs(_manifest, _opts), do: :ok
+
+  defp run_pkg(name, path, requires_sudo, true) do
+    Owl.IO.puts(["  ", Owl.Data.tag("dry-run:", :light_black), " installer -pkg ", path, " -target /"])
+    if requires_sudo, do: :ok, else: :ok
+    Owl.IO.puts(["  ", Owl.Data.tag("would install:", :light_black), " ", name])
+  end
+
+  defp run_pkg(name, path, requires_sudo, false) do
+    Owl.IO.puts(["  Installing ", Owl.Data.tag(name, :green), " from ", path])
+    cmd = if requires_sudo, do: "sudo", else: "installer"
+    args = if requires_sudo, do: ["installer", "-pkg", path, "-target", "/"], else: ["-pkg", path, "-target", "/"]
+
+    case System.cmd(cmd, args, into: IO.stream(:stdio, :line)) do
+      {_out, 0} -> :ok
+      {out, code} -> Owl.IO.puts([Owl.Data.tag("✗ installer failed (#{code})\n", :red), out])
+    end
+  end
+
+  defp handle_direct_downloads(%{"direct_download" => list}, opts) when is_list(list) do
+    dry = opts[:dry_run] == true
+
+    Enum.each(list, fn item ->
+      id = item["id"] || item["name"]
+      case item["id"] do
+        "postgres-app" -> postgres_app_install(item, dry)
+        _ ->
+          Owl.IO.puts([Owl.Data.tag("! Skipping direct download installer for ", :yellow), to_string(id),
+            Owl.Data.tag(" (not yet implemented)", :light_black)])
+      end
+    end)
+  end
+
+  defp handle_direct_downloads(_manifest, _opts), do: :ok
+
+  defp postgres_app_install(_item, true) do
+    Owl.IO.puts(["  ", Owl.Data.tag("dry-run:", :light_black), " Install Postgres.app from official site (manual step)"])
+  end
+
+  defp postgres_app_install(_item, false) do
+    Owl.IO.puts([Owl.Data.tag("! Postgres.app automated install not implemented yet. Please install from https://postgresapp.com/", :yellow)])
+  end
+
+  defp item_name(item) do
+    cond do
+      is_map(item) and Map.has_key?(item, "name") -> item["name"]
+      is_map(item) and Map.has_key?(item, :name) -> item[:name]
+      true -> "unknown"
+    end
+  end
+
+  defp resolve_installers_dir(manifest, _opts) do
+    defaults = Map.get(manifest, "defaults", %{})
+    raw = Map.get(defaults, "installers_dir", "~/Installers")
+    expand_home(raw)
+  end
+
+  defp expand_home(path) when is_binary(path) do
+    case String.starts_with?(path, "~") do
+      true -> Path.join(System.user_home!(), String.trim_leading(path, "~/"))
+      false -> path
+    end
+  end
+
+  # -- Local DMG handling --
+  defp install_local_dmgs(%{"local_dmg" => dmgs} = manifest, opts) when is_list(dmgs) do
+    dry = opts[:dry_run] == true
+    installers_dir = resolve_installers_dir(manifest, opts)
+
+    Owl.IO.puts(["\n", Owl.Data.tag("▶ Installing from local .dmg images", :cyan), "\n"])
+
+    Enum.each(dmgs, fn item ->
+      name = item_name(item)
+      optional = truthy(item["optional"])
+
+      dmg_pattern =
+        item["dmg"]
+        |> to_string()
+        |> String.replace("{installers}", installers_dir)
+        |> Path.expand()
+
+      candidates = Path.wildcard(dmg_pattern)
+
+      case candidates do
+        [path | _] ->
+          with {:ok, mount} <- attach_dmg(path, dry) do
+            try do
+              app_name = Map.get(item, "app_name")
+              handle_dmg_contents(mount, app_name, dry)
+            after
+              detach_dmg(mount, dry)
+            end
+          else
+            {:error, reason} -> Owl.IO.puts([Owl.Data.tag("! Failed to attach DMG: ", :yellow), to_string(reason)])
+          end
+        [] ->
+          msg = "Missing DMG for #{name} at #{dmg_pattern}"
+          if optional, do: Owl.IO.puts([Owl.Data.tag("! ", :yellow), msg]), else: Owl.IO.puts([Owl.Data.tag("! ", :yellow), msg])
+      end
+    end)
+  end
+
+  defp install_local_dmgs(_manifest, _opts), do: :ok
+
+  defp attach_dmg(path, true) do
+    Owl.IO.puts(["  ", Owl.Data.tag("dry-run:", :light_black), " hdiutil attach -nobrowse ", path])
+    {:ok, "/Volumes/DRYRUN"}
+  end
+
+  defp attach_dmg(path, false) do
+    case System.cmd("hdiutil", ["attach", path, "-nobrowse"], stderr_to_stdout: true) do
+      {out, 0} ->
+        mount =
+          out
+          |> String.split("\n")
+          |> Enum.map(&String.trim/1)
+          |> Enum.filter(&(&1 != ""))
+          |> Enum.map(fn line ->
+            case Regex.run(~r{(/Volumes/[^\s]+)$}, line) do
+              [_, mnt] -> mnt
+              _ -> nil
+            end
+          end)
+          |> Enum.reject(&is_nil/1)
+          |> List.last()
+
+        if mount, do: {:ok, mount}, else: {:error, :mountpoint_not_found}
+      {out, code} -> {:error, "hdiutil attach failed (#{code}): #{out}"}
+    end
+  end
+
+  defp detach_dmg(_mount, true), do: :ok
+  defp detach_dmg(mount, false) do
+    _ = System.cmd("hdiutil", ["detach", mount], stderr_to_stdout: true)
+    :ok
+  end
+
+  defp handle_dmg_contents(mount, nil, true) do
+    Owl.IO.puts(["  ", Owl.Data.tag("dry-run:", :light_black), " would open ", mount, " for manual installation."])
+  end
+
+  defp handle_dmg_contents(mount, nil, false) do
+    Owl.IO.puts([Owl.Data.tag("! No app_name specified for ", :yellow), mount, ". Opening volume for manual install..."])
+    _ = System.cmd("open", [mount])
+    :ok
+  end
+
+  defp handle_dmg_contents(mount, app_name, true) when is_binary(app_name) do
+    Owl.IO.puts(["  ", Owl.Data.tag("dry-run:", :light_black), " cp -R ", Path.join(mount, app_name), " /Applications/"])
+  end
+
+  defp handle_dmg_contents(mount, app_name, false) when is_binary(app_name) do
+    src = Path.join(mount, app_name)
+    case File.exists?(src) do
+      true ->
+        {out, code} = System.cmd("cp", ["-R", src, "/Applications/"], stderr_to_stdout: true)
+        if code == 0, do: :ok, else: Owl.IO.puts([Owl.Data.tag("✗ Failed to copy app (#{code})\n", :red), out])
+      false ->
+        Owl.IO.puts([Owl.Data.tag("! App not found in mounted volume: ", :yellow), src, ". Opening volume..."])
+        _ = System.cmd("open", [mount])
+        :ok
+    end
+  end
+
+  defp truthy(val) do
+    case val do
+      true -> true
+      "true" -> true
+      1 -> true
+      "1" -> true
+      _ -> false
+    end
+  end
+end

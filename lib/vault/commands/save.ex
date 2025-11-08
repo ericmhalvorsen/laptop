@@ -22,7 +22,6 @@ defmodule Vault.Commands.Save do
       "\n"
     ])
 
-    # All backups go to vault directory
     backup_dotfiles(home_dir, vault_path)
     backup_local_bin(home_dir, vault_path)
     backup_homebrew(vault_path)
@@ -30,7 +29,6 @@ defmodule Vault.Commands.Save do
     backup_app_support(home_dir, vault_path)
     backup_home_directories(home_dir, vault_path)
 
-    # Show success summary
     Owl.Box.new([
       Owl.Data.tag("✓ Backup Complete!", :green),
       "\n\n",

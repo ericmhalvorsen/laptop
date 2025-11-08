@@ -38,6 +38,7 @@ defmodule Vault.CLI do
   defp process_command(:help), do: print_help()
   defp process_command({:save, args, opts}), do: Vault.Commands.Save.run(args, opts)
   defp process_command({:restore, args, opts}), do: Vault.Commands.Restore.run(args, opts)
+  defp process_command({:install, args, opts}), do: Vault.Commands.Install.run(args, opts)
   defp process_command({:status, args, opts}), do: Vault.Commands.Status.run(args, opts)
 
   defp process_command({:error, msg}) do
@@ -63,6 +64,9 @@ defmodule Vault.CLI do
       "  vault ",
       Owl.Data.tag("restore", :green),
       " [options]     Restore from vault\n",
+      "  vault ",
+      Owl.Data.tag("install", :green),
+      " [options]     Install apps defined in config/apps.yaml\n",
       "  vault ",
       Owl.Data.tag("status", :green),
       " [options]      Show vault status\n",

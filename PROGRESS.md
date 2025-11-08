@@ -1,10 +1,10 @@
 # Vault - Progress Tracking
 
-**Last Updated**: 2025-11-07
+**Last Updated**: 2025-11-08
 
 ## Current Status
 
-**Phase**: 4 Complete - Core Backup Features ✅
+**Phase**: 7 Implemented - Restore MVP ✅
 
 **Stats**:
 - 70 tests passing (0 failures)
@@ -47,38 +47,32 @@
 - Generates complete Brewfile via `brew bundle dump`
 - Exports formulas.txt, casks.txt, taps.txt
 - Shows counts in UI (72 formulas, 0 casks, 3 taps)
-- All files committed to git repo
-
-## Next Phases
+- All files committed to git
 
 ### Phase 5: Home Directory Backup (Tier 2 - Vault)
 **Goal**: Backup major home directories to vault (NOT git)
 
-Directories to backup:
-- [ ] Documents
-- [ ] Downloads
-- [ ] Pictures
-- [ ] Desktop
-- [ ] Music (optional)
-- [ ] Movies (optional)
-
-Implementation:
-- Use rsync for efficient copying
+- Backs up public home directories to `~/VaultBackup/home/`
+- Uses rsync when available (with excludes); falls back to recursive copy
 - Progress indicators for large transfers
-- Exclude patterns (.DS_Store, node_modules, etc.)
-- Store in `~/VaultBackup/home/` (NOT committed to git)
+- Excludes common junk: `.DS_Store`, `node_modules`, `.git`, `.cache`, etc.
+
+### Phase 7: Restore Command
+- Implements 4-step restore flow:
+  1) Restore home directories from `vault/home`
+  2) Restore fonts (`vault/fonts`), dotfiles (`vault/dotfiles`), and `local-bin`
+  3) Restore Application Support from `vault/app-support`
+  4) Run install pipeline (`vault install`)
+- Supports `--vault-path` and `--dry-run`
+- Non-destructive copy (no deletes) to avoid data loss
+
+## Next Phases
 
 ### Phase 6: Browser & App Data Backup (Tier 2)
 - [ ] Browser data (Brave, Chrome) → vault
 - [ ] Obsidian vaults → vault
 - [ ] Application configs/data → vault (post-install)
 
-### Phase 7: Restore Command
-- [ ] Restore dotfiles from repo
-- [ ] Restore configs from repo
-- [ ] Install Homebrew packages from Brewfile
-- [ ] Restore home directories from vault (if vault-path provided)
-- [ ] Restore browser/app data from vault
 
 ### Phase 8: Polish & UX
 - [ ] Status command (show what's backed up)

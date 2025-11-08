@@ -182,26 +182,74 @@ defmodule Vault.Backup.HomeDirs do
   end
 
   # Copy directory using rsync for better performance
-  defp copy_with_rsync(source, dest, exclude_patterns, _progress_id) do
+  defp copy_with_rsync(source, dest, exclude_patterns, progress_id) do
     # Build exclude arguments for rsync
     exclude_args =
       Enum.flat_map(exclude_patterns, fn pattern ->
         ["--exclude", pattern]
       end)
 
-    # rsync arguments:
-    # -a: archive mode (preserves permissions, times, etc.)
-    # --delete: delete files in dest that don't exist in source
-    # --info=progress2: show overall progress (not per-file)
+    # We stream rsync output and increment on each file path printed.
+    # --out-format=%n prints the file name for each transferred item.
+    rsync = System.find_executable("rsync")
     args =
       [
         "-a",
-        "--delete"
+        "--delete",
+        "--out-format=%n"
       ] ++ exclude_args ++ [source <> "/", dest]
 
-    case System.cmd("rsync", args, stderr_to_stdout: true) do
-      {_output, 0} -> :ok
-      {_output, _code} -> {:error, :rsync_failed}
+    port = Port.open({:spawn_executable, rsync}, [
+      :binary,
+      {:args, args},
+      :exit_status,
+      :stderr_to_stdout
+    ])
+
+    result = stream_rsync_and_increment(port, progress_id)
+    case result do
+      :ok -> :ok
+      _ -> {:error, :rsync_failed}
+    end
+  end
+
+  defp stream_rsync_and_increment(port, progress_id, buffer \\ "") do
+    receive do
+      {^port, {:data, data}} ->
+        # Accumulate and process by lines
+        chunk = buffer <> data
+        {lines, rest} = split_lines(chunk)
+        Enum.each(lines, fn line ->
+          case line do
+            "" -> :ok
+            "sending incremental file list" -> :ok
+            _ ->
+              # rsync prints directories with trailing '/'; only increment for files
+              if not String.ends_with?(line, "/") do
+                Owl.ProgressBar.inc(id: progress_id)
+              end
+          end
+        end)
+        stream_rsync_and_increment(port, progress_id, rest)
+
+      {^port, {:exit_status, 0}} ->
+        :ok
+
+      {^port, {:exit_status, _status}} ->
+        :error
+    after
+      60_000 ->
+        :error
+    end
+  end
+
+  defp split_lines(data) do
+    case String.split(data, "\n", parts: :infinity) do
+      [] -> {[], ""}
+      parts ->
+        # If data ends with newline, last part is ""
+        # Otherwise, keep last part as buffer remainder
+        {Enum.slice(parts, 0, length(parts) - 1), List.last(parts)}
     end
   end
 
