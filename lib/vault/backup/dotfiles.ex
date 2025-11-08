@@ -256,8 +256,10 @@ defmodule Vault.Backup.Dotfiles do
   defp copy_directory(source, dest) do
     with :ok <- File.mkdir_p(dest),
          {:ok, files} <- FileUtils.list_files_recursive(source) do
+
       results =
-        Enum.map(files, fn file ->
+        files
+        |> Enum.map(fn file ->
           src_file = Path.join(source, file)
           dst_file = Path.join(dest, file)
 

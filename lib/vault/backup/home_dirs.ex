@@ -124,27 +124,11 @@ defmodule Vault.Backup.HomeDirs do
           if dry_run do
             {:backed_up, dir}
           else
-            total_files = count_files(source_path, exclude)
             progress_id = String.to_atom("home_dir_#{dir}")
-
-            Owl.ProgressBar.start(
-              id: progress_id,
-              label: "  #{dir}",
-              total: max(total_files, 1),
-              bar_width_ratio: 0.5,
-              filled_symbol: "█",
-              partial_symbols: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
-            )
-
-            result =
-              case copy_directory_with_progress(source_path, dest_path, exclude, progress_id) do
-                :ok -> {:backed_up, dir}
-                {:error, _reason} -> {:skipped, dir}
-              end
-
-            Owl.LiveScreen.await_render()
-
-            result
+            case copy_directory_with_progress(source_path, dest_path, exclude, progress_id) do
+              :ok -> {:backed_up, dir}
+              {:error, _reason} -> {:skipped, dir}
+            end
           end
         else
           {:skipped, dir}
@@ -159,17 +143,64 @@ defmodule Vault.Backup.HomeDirs do
 
   # Copy directory with progress tracking
   defp copy_directory_with_progress(source, dest, exclude_patterns, progress_id) do
-    # Check if rsync is available for faster copying
     use_rsync = rsync_available?()
-
     if use_rsync do
-      copy_with_rsync(source, dest, exclude_patterns, progress_id)
+      # Preflight dry-run to determine exact transfer count
+      count = compute_transfers_count(source, dest, exclude_patterns)
+
+      if count == 0 do
+        Owl.IO.puts(["  ", Path.basename(source), " ", Owl.Data.tag("(Done)", :green)])
+        :ok
+      else
+        Owl.ProgressBar.start(
+          id: progress_id,
+          label: "  #{Path.basename(source)}",
+          total: count,
+          bar_width_ratio: 0.5,
+          filled_symbol: "█",
+          partial_symbols: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
+        )
+
+        result = copy_with_rsync(source, dest, exclude_patterns, progress_id)
+        Owl.LiveScreen.await_render()
+        result
+      end
     else
+      total_files = max(count_files(source, exclude_patterns), 1)
+
+      Owl.ProgressBar.start(
+        id: progress_id,
+        label: "  #{Path.basename(source)}",
+        total: total_files,
+        bar_width_ratio: 0.5,
+        filled_symbol: "█",
+        partial_symbols: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
+      )
+
       # Remove destination if it exists (for clean copy)
       File.rm_rf(dest)
-
       # Copy recursively with progress updates
-      copy_with_exclusions(source, dest, exclude_patterns, progress_id)
+      result = copy_with_exclusions(source, dest, exclude_patterns, progress_id)
+
+      Owl.LiveScreen.await_render()
+      result
+    end
+  end
+
+  defp compute_transfers_count(source, dest, exclude_patterns) do
+    rsync = System.find_executable("rsync")
+    exclude_args = Enum.flat_map(exclude_patterns, fn p -> ["--exclude", p] end)
+    # -n dry-run, -a archive, --delete to mirror behavior, --out-format=%n prints paths
+    args = ["-na", "--delete", "--out-format=%n"] ++ exclude_args ++ [source <> "/", dest]
+
+    case System.cmd(rsync, args, stderr_to_stdout: true) do
+      {output, 0} ->
+        output
+        |> String.split("\n", trim: true)
+        |> Enum.reject(&(&1 == "sending incremental file list"))
+        |> Enum.reject(&String.ends_with?(&1, "/"))
+        |> length()
+      {_out, _code} -> 1
     end
   end
 
@@ -213,26 +244,36 @@ defmodule Vault.Backup.HomeDirs do
     end
   end
 
-  defp stream_rsync_and_increment(port, progress_id, buffer \\ "") do
+  defp stream_rsync_and_increment(port, progress_id, buffer \\ "", inc_count \\ 0) do
     receive do
       {^port, {:data, data}} ->
         # Accumulate and process by lines
         chunk = buffer <> data
         {lines, rest} = split_lines(chunk)
-        Enum.each(lines, fn line ->
-          case line do
-            "" -> :ok
-            "sending incremental file list" -> :ok
-            _ ->
-              # rsync prints directories with trailing '/'; only increment for files
-              if not String.ends_with?(line, "/") do
-                Owl.ProgressBar.inc(id: progress_id)
-              end
-          end
-        end)
-        stream_rsync_and_increment(port, progress_id, rest)
+        new_count =
+          Enum.reduce(lines, inc_count, fn line, acc ->
+            case line do
+              "" -> :ok
+              "sending incremental file list" -> :ok
+              _ ->
+                # rsync prints directories with trailing '/'; only increment for files
+                if not String.ends_with?(line, "/") do
+                  Owl.ProgressBar.inc(id: progress_id)
+                  # throttle rendering to keep UI responsive
+                  if rem(acc + 1, 200) == 0 do
+                    Owl.LiveScreen.await_render()
+                  end
+                  acc + 1
+                else
+                  acc
+                end
+            end
+          end)
+        stream_rsync_and_increment(port, progress_id, rest, new_count)
 
       {^port, {:exit_status, 0}} ->
+        # final flush
+        Owl.LiveScreen.await_render()
         :ok
 
       {^port, {:exit_status, _status}} ->
