@@ -195,21 +195,6 @@ defmodule Vault.Backup.DotfilesTest do
     end
   end
 
-  describe "default_dotfiles/0" do
-    test "returns list of common dotfiles to back up" do
-      dotfiles = Dotfiles.default_dotfiles()
-
-      assert is_list(dotfiles)
-      assert ".zshrc" in dotfiles
-      assert ".bashrc" in dotfiles
-      assert ".gitconfig" in dotfiles
-      assert ".vimrc" in dotfiles
-      assert ".zshenv" in dotfiles
-      assert ".zprofile" in dotfiles
-      assert ".bash_profile" in dotfiles
-      assert ".irbrc" in dotfiles
-    end
-  end
 
   describe "backup_result" do
     test "result struct has required fields" do

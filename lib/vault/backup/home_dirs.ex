@@ -50,7 +50,7 @@ defmodule Vault.Backup.HomeDirs do
     exclude = Keyword.get(opts, :exclude, []) ++ @exclude_patterns
 
     with {:ok, _} <- validate_source(source_dir),
-         {:ok, dirs_to_backup} <- get_directories_to_backup(source_dir, dirs),
+         {:ok, dirs_to_backup} <- get_directories_to_backup(source_dir, vault_path, dirs),
          {:ok, _} <- maybe_create_home_dir(vault_path, dry_run) do
       result = process_directories(source_dir, vault_path, dirs_to_backup, exclude, dry_run)
       {:ok, result}
@@ -59,15 +59,23 @@ defmodule Vault.Backup.HomeDirs do
 
   # Get list of directories to backup
   # If dirs is provided, use that. Otherwise, discover all public directories.
-  defp get_directories_to_backup(source_dir, nil) do
+  defp get_directories_to_backup(source_dir, vault_path, nil) do
+    # Get vault directory name to exclude it
+    vault_dir_name = Path.basename(vault_path)
+
     case File.ls(source_dir) do
       {:ok, entries} ->
         # Filter to only directories that don't start with "."
+        # Exclude Library (we handle Application Support separately)
+        # Exclude vault directory (don't backup the backup!)
         public_dirs =
           entries
           |> Enum.filter(fn entry ->
             path = Path.join(source_dir, entry)
-            File.dir?(path) and not String.starts_with?(entry, ".")
+            File.dir?(path) and
+              not String.starts_with?(entry, ".") and
+              entry != "Library" and
+              entry != vault_dir_name
           end)
           |> Enum.sort()
 
@@ -78,7 +86,7 @@ defmodule Vault.Backup.HomeDirs do
     end
   end
 
-  defp get_directories_to_backup(_source_dir, dirs) when is_list(dirs) do
+  defp get_directories_to_backup(_source_dir, _vault_path, dirs) when is_list(dirs) do
     {:ok, dirs}
   end
 
@@ -116,10 +124,35 @@ defmodule Vault.Backup.HomeDirs do
           if dry_run do
             {:backed_up, dir}
           else
-            case copy_directory(source_path, dest_path, exclude) do
-              :ok -> {:backed_up, dir}
-              {:error, _reason} -> {:skipped, dir}
+            # Count total files for progress bar
+            total_files = count_files(source_path, exclude)
+
+            # Start progress bar for this directory
+            progress_id = String.to_atom("home_dir_#{dir}")
+
+            Owl.ProgressBar.start(
+              id: progress_id,
+              label: "  #{dir}",
+              total: max(total_files, 1),
+              bar_width_ratio: 0.5,
+              filled_symbol: "█",
+              partial_symbols: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
+            )
+
+            result =
+              case copy_directory_with_progress(source_path, dest_path, exclude, progress_id) do
+                :ok -> {:backed_up, dir}
+                {:error, _reason} -> {:skipped, dir}
+              end
+
+            # Stop the LiveScreen to clear progress bar
+            try do
+              Owl.LiveScreen.stop()
+            catch
+              :exit, _ -> :ok
             end
+
+            result
           end
         else
           {:skipped, dir}
@@ -132,17 +165,79 @@ defmodule Vault.Backup.HomeDirs do
     }
   end
 
-  # Copy directory with exclusions
-  defp copy_directory(source, dest, exclude_patterns) do
-    # Remove destination if it exists (for clean copy)
-    File.rm_rf(dest)
+  # Copy directory with progress tracking
+  defp copy_directory_with_progress(source, dest, exclude_patterns, progress_id) do
+    # Check if rsync is available for faster copying
+    use_rsync = rsync_available?()
 
-    # Copy recursively, filtering out excluded files
-    copy_with_exclusions(source, dest, exclude_patterns)
+    if use_rsync do
+      copy_with_rsync(source, dest, exclude_patterns, progress_id)
+    else
+      # Remove destination if it exists (for clean copy)
+      File.rm_rf(dest)
+
+      # Copy recursively with progress updates
+      copy_with_exclusions(source, dest, exclude_patterns, progress_id)
+    end
+  end
+
+  # Check if rsync is available on the system
+  defp rsync_available? do
+    case System.cmd("which", ["rsync"], stderr_to_stdout: true) do
+      {_, 0} -> true
+      _ -> false
+    end
+  end
+
+  # Copy directory using rsync for better performance
+  defp copy_with_rsync(source, dest, exclude_patterns, _progress_id) do
+    # Build exclude arguments for rsync
+    exclude_args =
+      Enum.flat_map(exclude_patterns, fn pattern ->
+        ["--exclude", pattern]
+      end)
+
+    # rsync arguments:
+    # -a: archive mode (preserves permissions, times, etc.)
+    # --delete: delete files in dest that don't exist in source
+    # --info=progress2: show overall progress (not per-file)
+    args =
+      [
+        "-a",
+        "--delete"
+      ] ++ exclude_args ++ [source <> "/", dest]
+
+    case System.cmd("rsync", args, stderr_to_stdout: true) do
+      {_output, 0} -> :ok
+      {_output, _code} -> {:error, :rsync_failed}
+    end
+  end
+
+  # Count total files in directory (for progress bar)
+  defp count_files(dir, exclude_patterns) do
+    case File.ls(dir) do
+      {:ok, entries} ->
+        Enum.reduce(entries, 0, fn entry, acc ->
+          path = Path.join(dir, entry)
+
+          if should_exclude?(entry, exclude_patterns) do
+            acc
+          else
+            if File.dir?(path) do
+              acc + count_files(path, exclude_patterns)
+            else
+              acc + 1
+            end
+          end
+        end)
+
+      {:error, _} ->
+        0
+    end
   end
 
   # Recursively copy directory with exclusions
-  defp copy_with_exclusions(source, dest, exclude_patterns) do
+  defp copy_with_exclusions(source, dest, exclude_patterns, progress_id) do
     # Create destination directory
     File.mkdir_p!(dest)
 
@@ -158,8 +253,13 @@ defmodule Vault.Backup.HomeDirs do
           unless should_exclude?(entry, exclude_patterns) do
             if File.dir?(source_path) do
               # Recursively copy subdirectory
-              copy_with_exclusions(source_path, dest_path, exclude_patterns)
+              copy_with_exclusions(source_path, dest_path, exclude_patterns, progress_id)
             else
+              # Increment progress
+              if progress_id do
+                Owl.ProgressBar.inc(id: progress_id)
+              end
+
               # Copy file, skip if it fails (sockets, special files, etc.)
               try do
                 File.cp!(source_path, dest_path)

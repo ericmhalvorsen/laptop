@@ -1,0 +1,27 @@
+AmazingPrint.defaults = {
+  # limit: 30
+}
+
+module IRB
+  def truncate_arrays!
+    Thread.current[:__awesome_print_full_arrays__] = false
+  end
+  module_function :truncate_arrays!
+
+  def expand_arrays!
+    Thread.current[:__awesome_print_full_arrays__] = true
+  end
+  module_function :expand_arrays!
+end
+
+AmazingPrint::Formatters::ArrayFormatter.class_eval do
+  def should_be_limited?
+    Thread.current[:__awesome_print_full_arrays__] != true && array.length > 100
+  end
+
+  def get_limit_size
+    5
+  end
+end
+
+

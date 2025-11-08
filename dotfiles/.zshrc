@@ -102,15 +102,16 @@ source $ZSH/oh-my-zsh.sh
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 alias ls="eza"
+alias vi="nvim"
 alias c="claude-wrapper"
 
-eval "$(starship init zsh)"
+# eval "$(starship init zsh)"
 
 # Add RVM to PATH for scripting. Make sure this is the last PATH variable change.
 
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+# export NVM_DIR="$HOME/.nvm"
+# [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+# [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
 # pnpm
 export PNPM_HOME="/Users/eric/Library/pnpm"
@@ -130,5 +131,6 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 export PATH="$PATH:/Applications/Postgres.app/Contents/Versions/17/bin:/Users/eric/.local/bin"
 
 eval "$(mise activate zsh)"
+export EDITOR="nvim"
 
 

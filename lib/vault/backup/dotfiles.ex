@@ -12,41 +12,56 @@ defmodule Vault.Backup.Dotfiles do
   alias Vault.Utils.FileUtils
 
   @doc """
-  Returns the list of default dotfiles to back up.
-
-  ## Examples
-
-      iex> Vault.Backup.Dotfiles.default_dotfiles()
-      [".zshrc", ".bashrc", ".gitconfig", ...]
-  """
-  def default_dotfiles do
-    [
-      ".zshrc",
-      ".zshenv",
-      ".zprofile",
-      ".bashrc",
-      ".bash_profile",
-      ".gitconfig",
-      ".vimrc",
-      ".irbrc",
-      ".tmux.conf"
-    ]
-  end
-
-  @doc """
-  Lists dotfiles that exist in the given directory.
-
-  Only returns files from the default_dotfiles/0 list that actually exist.
-
-  ## Examples
-
-      iex> Vault.Backup.Dotfiles.list_dotfiles("/home/user")
-      [".zshrc", ".gitconfig"]
+  Lists all dotfiles and dot directories in the given directory.
+  Excludes items matching patterns in .vaultignore.
   """
   def list_dotfiles(source_dir) do
-    default_dotfiles()
-    |> Enum.filter(fn dotfile ->
-      Path.join(source_dir, dotfile) |> File.exists?()
+    ignore_patterns = load_ignore_patterns()
+
+    case File.ls(source_dir) do
+      {:ok, files} ->
+        files
+        |> Enum.filter(&dotfile?/1)
+        |> Enum.reject(&should_ignore?(&1, ignore_patterns))
+        |> Enum.sort()
+
+      {:error, _} ->
+        []
+    end
+  end
+
+  defp dotfile?("." <> _rest), do: true
+  defp dotfile?(_), do: false
+
+  defp load_ignore_patterns do
+    ignore_file = Path.join([File.cwd!(), ".vaultignore"])
+
+    if File.exists?(ignore_file) do
+      File.read!(ignore_file)
+      |> String.split("\n", trim: true)
+      |> Enum.reject(&String.starts_with?(&1, "#"))
+    else
+      []
+    end
+  end
+
+  defp should_ignore?(item, patterns) do
+    Enum.any?(patterns, fn pattern ->
+      cond do
+        String.contains?(pattern, "*") ->
+          regex_pattern = pattern
+          |> String.replace(".", "\\.")
+          |> String.replace("*", ".*")
+          |> then(&("^" <> &1 <> "$"))
+
+          case Regex.compile(regex_pattern) do
+            {:ok, regex} -> Regex.match?(regex, item)
+            _ -> false
+          end
+
+        true ->
+          item == pattern
+      end
     end)
   end
 
@@ -73,12 +88,38 @@ defmodule Vault.Backup.Dotfiles do
          :ok <- File.mkdir_p(dest_dir) do
       dotfiles = list_dotfiles(source_dir)
 
+      # Start progress bar
+      Owl.ProgressBar.start(
+        id: :dotfiles,
+        label: "  Dotfiles",
+        total: length(dotfiles),
+        bar_width_ratio: 0.5,
+        filled_symbol: "█",
+        partial_symbols: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
+      )
+
       results =
         Enum.map(dotfiles, fn dotfile ->
           source = Path.join(source_dir, dotfile)
           dest = Path.join(dest_dir, dotfile)
-          copy_with_size(source, dest)
+
+          result =
+            cond do
+              File.dir?(source) -> copy_directory(source, dest)
+              File.regular?(source) -> copy_with_size(source, dest)
+              true -> {:error, :not_regular}
+            end
+
+          Owl.ProgressBar.inc(id: :dotfiles)
+          result
         end)
+
+      # Stop the LiveScreen to clear progress bar
+      try do
+        Owl.LiveScreen.stop()
+      catch
+        :exit, _ -> :ok
+      end
 
       files_copied = Enum.count(results, &match?({:ok, _}, &1))
       files_skipped = Enum.count(results, &match?({:error, _}, &1))
@@ -139,6 +180,16 @@ defmodule Vault.Backup.Dotfiles do
         if Enum.empty?(files) do
           return_empty_result()
         else
+          # Start progress bar
+          Owl.ProgressBar.start(
+            id: :local_bin,
+            label: "  Scripts",
+            total: length(files),
+            bar_width_ratio: 0.5,
+            filled_symbol: "█",
+            partial_symbols: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
+          )
+
           results =
             files
             |> Enum.map(fn file ->
@@ -146,23 +197,34 @@ defmodule Vault.Backup.Dotfiles do
               dest = Path.join(dest_dir, file)
 
               # Only backup regular files (not directories or symlinks)
-              cond do
-                not File.exists?(source) ->
-                  {:skipped, :not_found}
+              result =
+                cond do
+                  not File.exists?(source) ->
+                    {:skipped, :not_found}
 
-                File.dir?(source) ->
-                  {:skipped, :is_directory}
+                  File.dir?(source) ->
+                    {:skipped, :is_directory}
 
-                File.regular?(source) ->
-                  case copy_with_permissions(source, dest) do
-                    {:ok, size} -> {:ok, {file, size}}
-                    error -> error
-                  end
+                  File.regular?(source) ->
+                    case copy_with_permissions(source, dest) do
+                      {:ok, size} -> {:ok, {file, size}}
+                      error -> error
+                    end
 
-                true ->
-                  {:skipped, :not_regular_file}
-              end
+                  true ->
+                    {:skipped, :not_regular_file}
+                end
+
+              Owl.ProgressBar.inc(id: :local_bin)
+              result
             end)
+
+          # Stop the LiveScreen to clear progress bar
+          try do
+            Owl.LiveScreen.stop()
+          catch
+            :exit, _ -> :ok
+          end
 
           files_copied = Enum.count(results, &match?({:ok, _}, &1))
           files_skipped = Enum.count(results, fn r -> not match?({:ok, _}, r) end)
@@ -199,6 +261,31 @@ defmodule Vault.Backup.Dotfiles do
     with {:ok, _} <- FileUtils.copy_file(source, dest),
          {:ok, size} <- FileUtils.file_size(dest) do
       {:ok, size}
+    end
+  end
+
+  defp copy_directory(source, dest) do
+    with :ok <- File.mkdir_p(dest),
+         {:ok, files} <- FileUtils.list_files_recursive(source) do
+      results =
+        Enum.map(files, fn file ->
+          src_file = Path.join(source, file)
+          dst_file = Path.join(dest, file)
+
+          with :ok <- File.mkdir_p(Path.dirname(dst_file)),
+               :ok <- File.cp(src_file, dst_file),
+               {:ok, size} <- FileUtils.file_size(dst_file) do
+            {:ok, size}
+          end
+        end)
+
+      total_size =
+        results
+        |> Enum.filter(&match?({:ok, _}, &1))
+        |> Enum.map(fn {:ok, size} -> size end)
+        |> Enum.sum()
+
+      {:ok, total_size}
     end
   end
 
