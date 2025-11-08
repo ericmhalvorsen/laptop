@@ -13,6 +13,7 @@ backup-info.txt
 *-backup-*/
 
 .specstory
+.serena
 
 # Legacy shell scripts (kept for reference)
 /legacy/

@@ -16,13 +16,16 @@ defmodule Vault.Backup.HomeDirs do
   ]
 
   @doc """
-  Backs up specified home directories to the vault.
+  Backs up home directories to the vault.
+
+  If no directory list is provided, automatically discovers all public
+  (non-hidden) directories in the home directory.
 
   ## Parameters
 
     * `source_dir` - Home directory (usually System.user_home!())
     * `vault_path` - Vault directory path
-    * `dirs` - List of directory names to backup (e.g., ["Documents", "Downloads"])
+    * `dirs` - Optional list of directory names (defaults to all public dirs)
     * `opts` - Options keyword list
       * `:dry_run` - Boolean, if true don't actually copy files
       * `:exclude` - Additional patterns to exclude
@@ -36,21 +39,47 @@ defmodule Vault.Backup.HomeDirs do
 
   ## Examples
 
-      iex> HomeDirs.backup("/Users/eric", "/tmp/vault", ["Documents", "Downloads"])
-      {:ok, %{backed_up: ["Documents", "Downloads"], skipped: []}}
+      iex> HomeDirs.backup("/Users/eric", "/tmp/vault")
+      {:ok, %{backed_up: ["Documents", "Downloads", "Desktop", ...], skipped: []}}
 
-      iex> HomeDirs.backup("/Users/eric", "/tmp/vault", ["Documents"], dry_run: true)
+      iex> HomeDirs.backup("/Users/eric", "/tmp/vault", ["Documents"])
       {:ok, %{backed_up: ["Documents"], skipped: []}}
   """
-  def backup(source_dir, vault_path, dirs, opts \\ []) do
+  def backup(source_dir, vault_path, dirs \\ nil, opts \\ []) do
     dry_run = Keyword.get(opts, :dry_run, false)
     exclude = Keyword.get(opts, :exclude, []) ++ @exclude_patterns
 
     with {:ok, _} <- validate_source(source_dir),
+         {:ok, dirs_to_backup} <- get_directories_to_backup(source_dir, dirs),
          {:ok, _} <- maybe_create_home_dir(vault_path, dry_run) do
-      result = process_directories(source_dir, vault_path, dirs, exclude, dry_run)
+      result = process_directories(source_dir, vault_path, dirs_to_backup, exclude, dry_run)
       {:ok, result}
     end
+  end
+
+  # Get list of directories to backup
+  # If dirs is provided, use that. Otherwise, discover all public directories.
+  defp get_directories_to_backup(source_dir, nil) do
+    case File.ls(source_dir) do
+      {:ok, entries} ->
+        # Filter to only directories that don't start with "."
+        public_dirs =
+          entries
+          |> Enum.filter(fn entry ->
+            path = Path.join(source_dir, entry)
+            File.dir?(path) and not String.starts_with?(entry, ".")
+          end)
+          |> Enum.sort()
+
+        {:ok, public_dirs}
+
+      {:error, reason} ->
+        {:error, "failed to list home directory: #{reason}"}
+    end
+  end
+
+  defp get_directories_to_backup(_source_dir, dirs) when is_list(dirs) do
+    {:ok, dirs}
   end
 
   # Validate source directory exists
@@ -131,8 +160,13 @@ defmodule Vault.Backup.HomeDirs do
               # Recursively copy subdirectory
               copy_with_exclusions(source_path, dest_path, exclude_patterns)
             else
-              # Copy file
-              File.cp!(source_path, dest_path)
+              # Copy file, skip if it fails (sockets, special files, etc.)
+              try do
+                File.cp!(source_path, dest_path)
+              rescue
+                File.CopyError -> :ok
+                File.Error -> :ok
+              end
             end
           end
         end)

@@ -4,7 +4,6 @@ defmodule Vault.Commands.Save do
   """
 
   alias Vault.Backup.Dotfiles
-  alias Vault.Backup.Config
   alias Vault.Backup.Homebrew
   alias Vault.Backup.HomeDirs
   alias Vault.Utils.FileUtils
@@ -12,7 +11,6 @@ defmodule Vault.Commands.Save do
   def run(_args, opts) do
     vault_path = get_vault_path(opts)
     home_dir = System.user_home!()
-    repo_dir = File.cwd!()
 
     Owl.IO.puts([
       Owl.Data.tag("\n📦 Vault Save", :cyan),
@@ -22,47 +20,35 @@ defmodule Vault.Commands.Save do
       "\n"
     ])
 
-    # Backup dotfiles to repo
-    backup_dotfiles(home_dir, repo_dir)
-
-    # Backup local-bin scripts to repo
-    backup_local_bin(home_dir, repo_dir)
-
-    # Backup configs to repo
-    backup_configs(home_dir, repo_dir)
-
-    # Backup Homebrew packages to repo
-    backup_homebrew(repo_dir)
-
-    # Backup home directories to vault (only if vault path provided)
+    # All backups go to vault directory
+    backup_dotfiles(home_dir, vault_path)
+    backup_local_bin(home_dir, vault_path)
+    backup_homebrew(vault_path)
     backup_home_directories(home_dir, vault_path)
 
     # Show success summary
     Owl.Box.new([
       Owl.Data.tag("✓ Backup Complete!", :green),
       "\n\n",
-      "Tier 1 (committed to git):\n",
-      Owl.Data.tag("  ✓ Dotfiles", :green),
+      "Saved to vault:\n",
+      Owl.Data.tag("  ✓ Dotfiles (.config included)", :green),
       "\n",
       Owl.Data.tag("  ✓ Local scripts", :green),
       "\n",
-      Owl.Data.tag("  ✓ Configuration", :green),
-      "\n",
       Owl.Data.tag("  ✓ Homebrew", :green),
-      "\n\n",
-      "Tier 2 (vault):\n",
+      "\n",
       Owl.Data.tag("  ✓ Home directories", :green),
       "\n\n",
       Owl.Data.tag("Coming soon:", :yellow),
-      " Browser, Obsidian, App data\n"
+      " Browser, Obsidian\n"
     ])
     |> Owl.IO.puts()
   end
 
-  defp backup_homebrew(repo_dir) do
+  defp backup_homebrew(vault_path) do
     Owl.IO.puts(["\n", Owl.Data.tag("→ Backing up Homebrew packages...", :cyan)])
 
-    case Homebrew.backup(repo_dir) do
+    case Homebrew.backup(vault_path) do
       {:ok, result} ->
         Owl.IO.puts([
           "  ",
@@ -89,49 +75,8 @@ defmodule Vault.Commands.Save do
     end
   end
 
-  defp backup_configs(home_dir, repo_dir) do
-    dest = Path.join(repo_dir, "config")
-
-    Owl.IO.puts(["\n", Owl.Data.tag("→ Backing up configuration...", :cyan)])
-
-    case Config.backup(home_dir, dest) do
-      {:ok, result} ->
-        if result.configs_backed_up > 0 do
-          Owl.IO.puts([
-            "  ",
-            Owl.Data.tag("✓", :green),
-            " Backed up ",
-            Owl.Data.tag("#{result.configs_backed_up}", :cyan),
-            " config(s) (",
-            Owl.Data.tag(FileUtils.format_size(result.total_size), :yellow),
-            ")"
-          ])
-
-          if not Enum.empty?(result.backed_up_configs) do
-            Owl.IO.puts([
-              "    Apps: ",
-              Enum.join(result.backed_up_configs, ", ")
-            ])
-          end
-        else
-          Owl.IO.puts([
-            "  ",
-            Owl.Data.tag("ℹ", :yellow),
-            " No supported configs found"
-          ])
-        end
-
-      {:error, reason} ->
-        Owl.IO.puts([
-          "  ",
-          Owl.Data.tag("✗", :red),
-          " Failed: #{reason}"
-        ])
-    end
-  end
-
-  defp backup_dotfiles(home_dir, repo_dir) do
-    dest = Path.join(repo_dir, "dotfiles")
+  defp backup_dotfiles(home_dir, vault_path) do
+    dest = Path.join(vault_path, "dotfiles")
 
     Owl.IO.puts(["\n", Owl.Data.tag("→ Backing up dotfiles...", :cyan)])
 
@@ -163,8 +108,8 @@ defmodule Vault.Commands.Save do
     end
   end
 
-  defp backup_local_bin(home_dir, repo_dir) do
-    dest = Path.join(repo_dir, "local-bin")
+  defp backup_local_bin(home_dir, vault_path) do
+    dest = Path.join(vault_path, "local-bin")
 
     Owl.IO.puts(["\n", Owl.Data.tag("→ Backing up local scripts...", :cyan)])
 
@@ -203,12 +148,10 @@ defmodule Vault.Commands.Save do
   end
 
   defp backup_home_directories(home_dir, vault_path) do
-    # Directories to backup
-    dirs = ["Documents", "Downloads", "Pictures", "Desktop"]
-
     Owl.IO.puts(["\n", Owl.Data.tag("→ Backing up home directories...", :cyan)])
 
-    case HomeDirs.backup(home_dir, vault_path, dirs) do
+    # Auto-discover all public (non-dot) directories
+    case HomeDirs.backup(home_dir, vault_path) do
       {:ok, result} ->
         if length(result.backed_up) > 0 do
           Owl.IO.puts([
