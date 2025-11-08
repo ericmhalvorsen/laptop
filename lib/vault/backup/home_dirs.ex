@@ -124,10 +124,7 @@ defmodule Vault.Backup.HomeDirs do
           if dry_run do
             {:backed_up, dir}
           else
-            # Count total files for progress bar
             total_files = count_files(source_path, exclude)
-
-            # Start progress bar for this directory
             progress_id = String.to_atom("home_dir_#{dir}")
 
             Owl.ProgressBar.start(
@@ -145,12 +142,7 @@ defmodule Vault.Backup.HomeDirs do
                 {:error, _reason} -> {:skipped, dir}
               end
 
-            # Stop the LiveScreen to clear progress bar
-            try do
-              Owl.LiveScreen.stop()
-            catch
-              :exit, _ -> :ok
-            end
+            Owl.LiveScreen.await_render()
 
             result
           end

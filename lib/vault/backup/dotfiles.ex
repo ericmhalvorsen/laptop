@@ -88,7 +88,6 @@ defmodule Vault.Backup.Dotfiles do
          :ok <- File.mkdir_p(dest_dir) do
       dotfiles = list_dotfiles(source_dir)
 
-      # Start progress bar
       Owl.ProgressBar.start(
         id: :dotfiles,
         label: "  Dotfiles",
@@ -114,12 +113,7 @@ defmodule Vault.Backup.Dotfiles do
           result
         end)
 
-      # Stop the LiveScreen to clear progress bar
-      try do
-        Owl.LiveScreen.stop()
-      catch
-        :exit, _ -> :ok
-      end
+      Owl.LiveScreen.await_render()
 
       files_copied = Enum.count(results, &match?({:ok, _}, &1))
       files_skipped = Enum.count(results, &match?({:error, _}, &1))
@@ -219,12 +213,7 @@ defmodule Vault.Backup.Dotfiles do
               result
             end)
 
-          # Stop the LiveScreen to clear progress bar
-          try do
-            Owl.LiveScreen.stop()
-          catch
-            :exit, _ -> :ok
-          end
+          Owl.LiveScreen.await_render()
 
           files_copied = Enum.count(results, &match?({:ok, _}, &1))
           files_skipped = Enum.count(results, fn r -> not match?({:ok, _}, r) end)

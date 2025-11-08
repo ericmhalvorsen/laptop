@@ -119,6 +119,9 @@ defmodule Vault.TestHelpers do
       File.rm_rf!(dest)
     end)
 
+    Owl.IO.puts("Source: #{source}")
+    Owl.IO.puts("Dest: #{dest}")
+
     %{source: source, dest: dest}
   end
 end

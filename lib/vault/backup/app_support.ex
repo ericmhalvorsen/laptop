@@ -95,12 +95,7 @@ defmodule Vault.Backup.AppSupport do
               result
             end)
 
-          # Stop the LiveScreen to clear progress bar
-          try do
-            Owl.LiveScreen.stop()
-          catch
-            :exit, _ -> :ok
-          end
+          Owl.LiveScreen.await_render()
 
           backed_up =
             results
