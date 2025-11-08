@@ -6,6 +6,7 @@ defmodule Vault.Commands.Save do
   alias Vault.Backup.Dotfiles
   alias Vault.Backup.Config
   alias Vault.Backup.Homebrew
+  alias Vault.Backup.HomeDirs
   alias Vault.Utils.FileUtils
 
   def run(_args, opts) do
@@ -33,11 +34,14 @@ defmodule Vault.Commands.Save do
     # Backup Homebrew packages to repo
     backup_homebrew(repo_dir)
 
+    # Backup home directories to vault (only if vault path provided)
+    backup_home_directories(home_dir, vault_path)
+
     # Show success summary
     Owl.Box.new([
       Owl.Data.tag("✓ Backup Complete!", :green),
       "\n\n",
-      "Repository backups (committed to git):\n",
+      "Tier 1 (committed to git):\n",
       Owl.Data.tag("  ✓ Dotfiles", :green),
       "\n",
       Owl.Data.tag("  ✓ Local scripts", :green),
@@ -46,8 +50,11 @@ defmodule Vault.Commands.Save do
       "\n",
       Owl.Data.tag("  ✓ Homebrew", :green),
       "\n\n",
+      "Tier 2 (vault):\n",
+      Owl.Data.tag("  ✓ Home directories", :green),
+      "\n\n",
       Owl.Data.tag("Coming soon:", :yellow),
-      " Browser, Home dirs, etc.\n"
+      " Browser, Obsidian, App data\n"
     ])
     |> Owl.IO.puts()
   end
@@ -183,6 +190,48 @@ defmodule Vault.Commands.Save do
             "  ",
             Owl.Data.tag("ℹ", :yellow),
             " No scripts found in ~/.local/bin"
+          ])
+        end
+
+      {:error, reason} ->
+        Owl.IO.puts([
+          "  ",
+          Owl.Data.tag("✗", :red),
+          " Failed: #{reason}"
+        ])
+    end
+  end
+
+  defp backup_home_directories(home_dir, vault_path) do
+    # Directories to backup
+    dirs = ["Documents", "Downloads", "Pictures", "Desktop"]
+
+    Owl.IO.puts(["\n", Owl.Data.tag("→ Backing up home directories...", :cyan)])
+
+    case HomeDirs.backup(home_dir, vault_path, dirs) do
+      {:ok, result} ->
+        if length(result.backed_up) > 0 do
+          Owl.IO.puts([
+            "  ",
+            Owl.Data.tag("✓", :green),
+            " Backed up ",
+            Owl.Data.tag("#{length(result.backed_up)}", :cyan),
+            " directories"
+          ])
+
+          Owl.IO.puts([
+            "    Directories: ",
+            Enum.join(result.backed_up, ", ")
+          ])
+        end
+
+        if length(result.skipped) > 0 do
+          Owl.IO.puts([
+            "  ",
+            Owl.Data.tag("ℹ", :yellow),
+            " Skipped ",
+            "#{length(result.skipped)} (not found): ",
+            Enum.join(result.skipped, ", ")
           ])
         end
 

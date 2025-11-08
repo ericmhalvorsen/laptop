@@ -1,506 +1,176 @@
-# Vault - Mac Setup CLI Tool
+# Vault - Progress Tracking
 
-## Project Vision
-
-Transform the current shell script-based Mac setup tool into a modern CLI application called "Vault" that:
-- Provides a clean command interface for backup/restore operations
-- Separates lightweight config (repo) from heavy data (vault directory)
-- Handles both dotfiles/configs AND full home directory backups
-- Uses modern CLI framework with proper testing
-
-## Architecture
-
-### Current State
-- Shell scripts: `backup.sh` and `setup.sh`
-- Everything committed to git repo
-- Manual handling of sensitive files
-
-### Target State
-- **Vault CLI**: Modern Elixir-based CLI tool (using Owl framework)
-- **Git Repo**: Contains CLI tool + lightweight configs (committed to git)
-  - Dotfiles (.zshrc, .gitconfig, etc.)
-  - App configs (.config directories)
-  - Local scripts (.local/bin)
-  - Homebrew package lists
-- **Vault Directory**: Separate storage for heavy data (NOT in git)
-  - Browser data (settings, history, bookmarks)
-  - Application data (app-specific settings)
-  - Obsidian notes
-  - Home directory data (Documents, Downloads, Pictures, Desktop, etc.)
-  - Sensitive files (.netrc, SSH keys, GPG keys)
-- **Applications**: Install from latest sources (Homebrew, GitHub releases, etc.)
-  - No app installer backups - always get latest version
-  - Restore application settings/configs from vault
-
-## Progress Tracking
-
-### Phase 1: Planning & Setup ✅
-- [x] Create initial shell scripts
-- [x] Document browser backup process
-- [x] Document Obsidian backup process
-- [x] Create PROGRESS.md
-- [x] Create CLAUDE.md with project context
-- [x] Research Owl framework and document best practices
-
-### Phase 2: CLI Framework Setup ✅
-- [x] Research and evaluate Owl framework
-- [x] Set up Elixir/Erlang development environment (using mise)
-- [x] Initialize new Elixir project structure
-- [x] Configure Mix project with dependencies (Owl, ucwidth)
-- [x] Set up basic CLI skeleton with Owl
-- [x] Create initial command structure (`vault save`, `vault restore`, `vault status`)
-- [x] Build and test escript
-- [x] Create wrapper script for easy execution
-
-### Phase 2.5: Portable Executable Research ✅
-- [x] Research Burrito for self-contained executables
-- [x] Research Bakeware for single-file deployments
-- [x] Evaluate trade-offs (file size, compatibility, ease of use)
-- [x] Document portable build process in CLAUDE.md
-- [ ] (Optional) Test building portable executable with Burrito
-- [ ] (Optional) Add Burrito as alternative build target
-
-**Decision**: Keep escript for development (fast, small). Add Burrito as optional distribution target later.
-
-**Key Findings**:
-- Burrito creates truly portable binaries (no Erlang required)
-- File size: ~20-40MB (vs 1.5MB escript) due to bundled Erlang runtime
-- Requires code signing for macOS or users get Gatekeeper warnings
-- Great for distribution, but escript better for development
-- Hybrid approach: escript for dev, Burrito for releases
-
-### Phase 3: Testing Infrastructure ✅
-- [x] Set up ExUnit testing framework
-- [x] Create test helpers and fixtures
-- [x] Write tests for file operations (FileUtils module - 89.4% coverage)
-- [x] Add test coverage reporting (excoveralls with HTML reports)
-- [ ] Write tests for backup logic (will be done as we implement backup modules)
-- [ ] Write tests for restore logic (will be done as we implement restore modules)
-- [ ] Set up CI/CD for automated testing (optional for later)
-
-### Phase 4: Core Backup Command (`vault save`) - In Progress
-- [x] Implement dotfiles backup
-  - [x] Detect and copy standard dotfiles
-  - [x] Handle .local/bin scripts
-  - [x] Preserve file permissions
-  - [x] Full test coverage (17 tests, 91% coverage)
-  - [x] Beautiful Owl UI output
-  - [x] Integrated into save command
-- [x] Implement .config directory backup
-  - [x] Git configuration
-  - [x] Mise configuration
-  - [x] Extensible for other apps
-  - [x] Full test coverage (16 tests, 92.8% coverage)
-  - [x] Integrated into save command
-
-- Before continuing - for configs and dotfiles, we should scan the home directory to
-find candidates. I want new stuff to get saved next time I run the script. So like, it
-will look at what I have and back that up, and we can use a .ignore file type thing to
-prevent stuff we might not want
-
-- [ ] Implement Homebrew backup
-  - [ ] Export formulas list
-  - [ ] Export casks list
-  - [ ] Generate Brewfile
-- [x] Add tests for each backup component (17 + 16 = 33 tests)
-
-### Phase 5: Extended Backup Features
-- [ ] Implement home directory backup with rsync
-  - [ ] Documents directory
-  - [ ] Downloads directory
-  - [ ] Pictures directory
-  - [ ] Desktop directory
-  - [ ] Add excludes for common junk (.DS_Store, etc.)
-  - [ ] Progress indicator during rsync
-- [ ] Implement browser backup
-  - [ ] Brave browser data
-  - [ ] Chrome browser data
-  - [ ] Handle running browser gracefully
-- [ ] Implement Obsidian backup
-  - [ ] Detect vault location(s)
-  - [ ] Copy vault with proper structure
-  - [ ] Exclude workspace cache
-- [ ] Implement application wrapper backup
-  - [ ] Yaak
-  - [ ] RustDesk
-  - [ ] Docker Desktop
-  - [ ] Warp
-- [ ] Backup git-ignored sensitive files
-  - [ ] .netrc
-  - [ ] anthropic_key.sh
-  - [ ] SSH keys (optional, with warning)
-  - [ ] GPG keys (optional, with warning)
-- [ ] Add tests for all extended features
-
-### Phase 6: Warp Configuration Deep Dive
-- [ ] Research Warp config file locations
-  - [ ] Settings location
-  - [ ] Theme files location
-  - [ ] Custom blocks location
-  - [ ] Launch configurations
-- [ ] Implement comprehensive Warp backup
-- [ ] Test Warp restore on clean install
-- [ ] Document manual steps if any required
-
-### Phase 7: Restore Command (`vault restore`)
-- [ ] Implement dotfiles restore
-  - [ ] Copy files from vault to home
-  - [ ] Preserve permissions
-  - [ ] Backup existing files before overwrite
-- [ ] Implement .config restore
-- [ ] Implement Homebrew restore
-  - [ ] Install Homebrew if missing
-  - [ ] Install from Brewfile
-  - [ ] Handle failed installations gracefully
-- [ ] Implement oh-my-zsh setup
-- [ ] Implement application installations
-  - [ ] Copy app wrappers from vault
-  - [ ] Handle DMG mounting/copying
-  - [ ] Verify installations
-- [ ] Add tests for restore operations
-
-### Phase 8: Extended Restore Features
-- [ ] Implement home directory restore
-  - [ ] rsync from vault back to home
-  - [ ] Progress indicators
-  - [ ] Dry-run option
-- [ ] Implement browser data restore
-  - [ ] Check if browser is running
-  - [ ] Restore Brave data
-  - [ ] Restore Chrome data
-- [ ] Implement Obsidian restore
-  - [ ] Copy vault to destination
-  - [ ] Prompt for vault location
-- [ ] Implement application config restore
-  - [ ] Warp settings
-  - [ ] Claude Code settings
-  - [ ] Other app configs
-- [ ] Add tests for extended restore
-
-### Phase 9: Additional CLI Commands
-- [ ] Implement `vault status`
-  - [ ] Show what's backed up
-  - [ ] Show backup age
-  - [ ] Show vault size
-  - [ ] Show what's missing from backup
-- [ ] Implement `vault diff`
-  - [ ] Compare current system to vault
-  - [ ] Show changed dotfiles
-  - [ ] Show new/removed files
-- [ ] Implement `vault list`
-  - [ ] List all backed up components
-  - [ ] Show backup dates
-- [ ] Implement `vault verify`
-  - [ ] Check vault integrity
-  - [ ] Verify all expected files exist
-- [ ] Add tests for utility commands
-
-### Phase 10: User Experience
-- [ ] Add colorful output (via Owl)
-- [ ] Add progress bars for long operations
-- [ ] Add interactive prompts for dangerous operations
-- [ ] Add verbose/quiet modes
-- [ ] Add dry-run mode for testing
-- [ ] Improve error messages and recovery
-- [ ] Add confirmation prompts
-- [ ] Add logging to file
-
-### Phase 11: Migration & Documentation
-- [ ] Create migration guide from shell scripts to CLI
-- [ ] Update README.md for CLI usage
-- [ ] Create man pages or help documentation
-- [ ] Add inline help for all commands
-- [ ] Create quickstart guide
-- [ ] Update browser backup docs for CLI
-- [ ] Update Obsidian backup docs for CLI
-- [ ] Add troubleshooting guide
-
-### Phase 12: Packaging & Distribution
-- [ ] Create escript build
-- [ ] Add installation script
-- [ ] Create release workflow
-- [ ] Add version command
-- [ ] Create update mechanism
-- [ ] Test on clean Mac
-- [ ] Create homebrew formula (optional)
-
-### Phase 13: Cleanup
-- [ ] Archive old shell scripts
-- [ ] Remove redundant documentation
-- [ ] Final testing on multiple Macs
-- [ ] Create demo video/GIF
-- [ ] Celebrate! 🎉
-
-## Technical Decisions
-
-### Why Owl Framework?
-- Modern Elixir CLI framework
-- Built-in components: progress bars, spinners, prompts
-- Excellent for interactive CLIs
-- Good documentation and examples
-
-### Why Separate Vault Directory?
-- Keeps git repo lightweight
-- Allows vault to be backed up to external drive
-- Can exclude vault from git entirely
-- Makes it easier to handle large files (apps, browser data)
-
-### Repository vs Vault
-
-**Git Repository** (`~/code/laptop/`):
-- Vault CLI tool (Elixir code)
-- Documentation
-- Tests
-- Installation scripts
-- No heavy files
-- Safe to commit and push
-
-**Vault Directory** (e.g., `~/VaultBackup/` or external drive):
-- All dotfiles
-- All configs
-- Application installers
-- Browser data
-- Obsidian vaults
-- Home directory data
-- Sensitive files
-- Can be synced to external backup drive
-- NOT committed to git
-
-## Commands Design
-
-```bash
-# Save current system
-vault save [--vault-path PATH] [--full] [--exclude PATTERN]
-  # Saves lightweight configs to git repo (dotfiles, configs, brew)
-  # Saves heavy data to vault directory (apps, browser, home dirs)
-
-# Restore from backups
-vault restore [--vault-path PATH] [--dry-run] [--component COMPONENT]
-  # Without --vault-path: Restore only git repo configs (data-less)
-  # With --vault-path: Restore both repo configs + vault data
-
-# Show vault status
-vault status [--vault-path PATH]
-  # Shows what's in repo vs what's in vault
-
-# Compare current system to backups
-vault diff [--vault-path PATH]
-
-# List backup contents
-vault list [--vault-path PATH]
-
-# Verify backup integrity
-vault verify [--vault-path PATH]
-
-# Initialize new vault
-vault init [--vault-path PATH]
-```
-
-## Configuration
-
-Vault will support a config file at `~/.vault/config.toml`:
-
-```toml
-[vault]
-default_path = "/Users/eric/VaultBackup"
-
-[backup]
-exclude_patterns = [".DS_Store", "node_modules"]
-include_home_dirs = ["Documents", "Downloads", "Pictures", "Desktop"]
-
-[backup.dotfiles]
-files = [".zshrc", ".gitconfig", ".vimrc"]
-
-[backup.apps]
-backup_installers = true
-
-[restore]
-confirm_overwrites = true
-backup_existing = true
-```
-
-## File Structure
-
-```
-laptop/                          # Git repository (committed to GitHub)
-├── lib/
-│   └── vault/
-│       ├── cli.ex              # Main CLI entry
-│       ├── commands/
-│       │   ├── save.ex         # Save command
-│       │   ├── restore.ex      # Restore command
-│       │   ├── status.ex       # Status command
-│       │   └── ...
-│       ├── backup/
-│       │   ├── dotfiles.ex     # Backs up to repo
-│       │   ├── homebrew.ex     # Backs up to repo
-│       │   ├── apps.ex         # Backs up to vault
-│       │   ├── browser.ex      # Backs up to vault
-│       │   └── home_dirs.ex    # Backs up to vault
-│       └── restore/
-│           └── ...
-├── dotfiles/                    # COMMITTED - Backed up dotfiles
-│   ├── .zshrc
-│   ├── .gitconfig
-│   └── ...
-├── config/                      # COMMITTED - App configs
-│   ├── claude/
-│   ├── warp/
-│   ├── mise/
-│   └── ...
-├── local-bin/                   # COMMITTED - Custom scripts
-│   ├── claude-wrapper
-│   └── ...
-├── brew/                        # COMMITTED - Homebrew lists
-│   ├── Brewfile
-│   ├── formulas.txt
-│   └── casks.txt
-├── test/
-│   └── vault/
-│       ├── commands/
-│       └── backup/
-├── mix.exs
-├── README.md
-├── PROGRESS.md                  # This file
-├── docs/
-│   ├── browser-backup.md
-│   └── obsidian-backup.md
-└── legacy/                      # Old shell scripts
-    ├── backup.sh
-    └── setup.sh
-
-~/VaultBackup/                   # Vault directory (NOT in git)
-├── browser/                     # Browser data
-│   ├── brave/
-│   └── chrome/
-├── app-data/                    # Application settings/data
-│   ├── warp/                    # Warp settings (post-install)
-│   ├── yaak/                    # Yaak settings (post-install)
-│   └── ...
-├── obsidian/                    # Obsidian vaults
-│   └── YourVault/
-├── home/                        # Home directory data
-│   ├── Documents/
-│   ├── Downloads/
-│   ├── Pictures/
-│   ├── Desktop/
-│   └── ...
-└── sensitive/                   # Sensitive files
-    ├── .netrc
-    ├── ssh-keys/
-    ├── gpg-keys/
-    └── ...
-
-Note: Applications installed from latest sources, NOT backed up
-```
-
-## Notes & Decisions
-
-### Open Questions
-- [ ] Should vault directory be encrypted?
-- [ ] Should we support multiple vault "profiles"?
-- [ ] Should we integrate with Time Machine?
-- [ ] Should we support cloud backup (S3, Dropbox)?
-
-### Risks & Mitigations
-- **Large files**: Use streaming/rsync for efficiency
-- **Long operations**: Add progress indicators
-- **Failed restores**: Always backup before overwriting
-- **Missing dependencies**: Check and install Erlang/Elixir
-- **Permissions**: Handle sudo gracefully
-
-## Getting Started with Development
-
-1. Install Elixir:
-   ```bash
-   brew install elixir
-   ```
-
-2. Initialize Mix project:
-   ```bash
-   mix new vault --sup
-   ```
-
-3. Add Owl dependency to `mix.exs`:
-   ```elixir
-   {:owl, "~> 0.11"}
-   ```
-
-4. Run tests:
-   ```bash
-   mix test
-   ```
-
-5. Build escript:
-   ```bash
-   mix escript.build
-   ```
-
-## Timeline Estimate
-
-- Phase 2-3 (Setup): 1-2 days
-- Phase 4-5 (Backup): 3-4 days
-- Phase 6 (Warp): 1 day
-- Phase 7-8 (Restore): 3-4 days
-- Phase 9 (Commands): 2 days
-- Phase 10-11 (UX/Docs): 2-3 days
-- Phase 12-13 (Package/Test): 2-3 days
-
-**Total: ~2-3 weeks of focused development**
+**Last Updated**: 2025-11-07
 
 ## Current Status
 
-**Last Updated**: 2025-11-06
+**Phase**: 4 Complete - Core Backup Features ✅
 
-**Current Phase**: Phase 4 In Progress - Dotfiles & Config Complete
+**Stats**:
+- 70 tests passing (0 failures)
+- 61.4% overall coverage
+- 3 backup modules complete: Dotfiles, Config, Homebrew
 
-**Completed**:
-- ✅ Phase 1: Planning, documentation, and Owl research
-- ✅ Phase 2: CLI Framework Setup - Working escript with beautiful Owl UI!
-- ✅ Phase 2.5: Portable Executable Research - Documented Burrito for future releases
-- ✅ Phase 3: Testing Infrastructure - 59 passing tests, 59.5% overall coverage
-- ✅ Phase 4 (Dotfiles): Dotfiles and local-bin backup complete!
-- ✅ Phase 4 (Config): App configuration backup complete!
+## Completed Phases
 
-**Recent Accomplishments** (Phase 4 - Config):
-- Implemented `Vault.Backup.Config` module with TDD approach:
-  - Backs up ~/.config/git configuration
-  - Backs up ~/.config/mise configuration
-  - Extensible design for adding more apps
-  - Preserves nested directory structures
-  - Handles missing configs gracefully
-- **16 comprehensive tests** covering all scenarios:
-  - Individual and batch backup operations
-  - Nested directory structures
-  - Missing or empty configs
-  - File content preservation
-  - Error conditions
-- **92.8% code coverage** on Config module
-- Integrated into `vault save` command:
-  - Shows config count and total size
-  - Lists backed up apps
-  - Graceful handling of no configs
+### ✅ Phase 1: Planning & Setup
+- Project documentation and architecture design
+- Owl framework research and best practices
+- CLAUDE.md context file for AI assistance
 
-**Phase 4 Summary - Both Modules**:
-- Implemented 2 core backup modules (Dotfiles, Config)
-- **33 comprehensive tests** (17 + 16)
-- **Average 91.9% coverage** (91.0% + 92.8%)
-- **Real-world tested** with actual system configs
-- Beautiful Owl UI with colored output
-- **Total: 59 tests passing, 0 failures**
+### ✅ Phase 2: CLI Framework
+- Elixir/Erlang setup with mise
+- Basic CLI structure with Owl UI
+- Escript build configuration
+- Beautiful colored terminal output
 
-**Test Coverage Summary**:
+### ✅ Phase 3: Testing Infrastructure
+- ExUnit testing framework
+- Test coverage reporting (excoveralls)
+- Temp directory test patterns
+- 89.4% coverage on FileUtils
+
+### ✅ Phase 4: Core Backup (Tier 1 - Git Repo)
+**Dotfiles Module** (17 tests, 76.7% coverage):
+- Backs up standard dotfiles from home directory
+- Handles ~/.local/bin scripts separately
+- Preserves file permissions
+- Integrated into `vault save`
+
+**Config Module** (16 tests, 91.2% coverage):
+- Backs up ~/.config directories
+- Supports git, mise, and other app configs
+- Preserves nested directory structures
+- Extensible design for new apps
+
+**Homebrew Module** (14 tests, 78.9% coverage):
+- Generates complete Brewfile via `brew bundle dump`
+- Exports formulas.txt, casks.txt, taps.txt
+- Shows counts in UI (72 formulas, 0 casks, 3 taps)
+- All files committed to git repo
+
+## Next Phases
+
+### Phase 5: Home Directory Backup (Tier 2 - Vault)
+**Goal**: Backup major home directories to vault (NOT git)
+
+Directories to backup:
+- [ ] Documents
+- [ ] Downloads
+- [ ] Pictures
+- [ ] Desktop
+- [ ] Music (optional)
+- [ ] Movies (optional)
+
+Implementation:
+- Use rsync for efficient copying
+- Progress indicators for large transfers
+- Exclude patterns (.DS_Store, node_modules, etc.)
+- Store in `~/VaultBackup/home/` (NOT committed to git)
+
+### Phase 6: Browser & App Data Backup (Tier 2)
+- [ ] Browser data (Brave, Chrome) → vault
+- [ ] Obsidian vaults → vault
+- [ ] Application configs/data → vault (post-install)
+
+### Phase 7: Restore Command
+- [ ] Restore dotfiles from repo
+- [ ] Restore configs from repo
+- [ ] Install Homebrew packages from Brewfile
+- [ ] Restore home directories from vault (if vault-path provided)
+- [ ] Restore browser/app data from vault
+
+### Phase 8: Polish & UX
+- [ ] Status command (show what's backed up)
+- [ ] Diff command (compare system to backups)
+- [ ] Better error handling and recovery
+- [ ] Dry-run mode for all commands
+
+### Phase 9: Documentation & Release
+- [ ] Update README with complete usage
+- [ ] Create quickstart guide
+- [ ] Test on clean Mac
+- [ ] Optional: Burrito portable executable
+
+## Architecture
+
+### Two-Tier Backup System
+
+**Tier 1: Git Repository** (Lightweight - Committed to Git)
+```
+laptop/
+├── dotfiles/        # Dotfiles from ~
+├── config/          # App configs from ~/.config
+├── local-bin/       # Scripts from ~/.local/bin
+├── brew/            # Homebrew package lists
+│   ├── Brewfile
+│   ├── formulas.txt
+│   ├── casks.txt
+│   └── taps.txt
+└── lib/vault/       # CLI source code
+```
+
+**Tier 2: Vault Directory** (Heavy Data - NOT in Git)
+```
+~/VaultBackup/
+├── home/            # Home directories (rsync'd)
+│   ├── Documents/
+│   ├── Downloads/
+│   ├── Pictures/
+│   └── Desktop/
+├── browser/         # Browser data
+│   ├── brave/
+│   └── chrome/
+├── obsidian/        # Obsidian vaults
+└── app-data/        # App-specific settings
+```
+
+## Test Coverage by Module
+
 ```
 100.0% - lib/vault.ex
 100.0% - lib/vault/application.ex
- 92.8% - lib/vault/backup/config.ex ✨ New!
- 91.0% - lib/vault/backup/dotfiles.ex
+ 91.2% - lib/vault/backup/config.ex
+ 76.7% - lib/vault/backup/dotfiles.ex
+ 78.9% - lib/vault/backup/homebrew.ex
  89.4% - lib/vault/utils/file_utils.ex
-  0.0% - Commands (partially implemented)
-[TOTAL] 59.5%
+  0.0% - Commands (thin orchestration layer)
+────────────────────────────────────────
+ 61.4% - TOTAL
 ```
 
-**Next Steps**:
-- Continue Phase 4: Implement Homebrew backup
-- Then move to Phase 5: Extended backup features
-- Continue TDD approach for all new modules
+## Commands
+
+```bash
+# Backup (Tier 1 to git repo, Tier 2 to vault)
+./vault save                                    # Tier 1 only
+./vault save --vault-path ~/VaultBackup        # Tier 1 + Tier 2
+
+# Restore
+./vault restore                                 # Tier 1 only (quick setup)
+./vault restore --vault-path ~/VaultBackup     # Tier 1 + Tier 2 (full restore)
+
+# Status (future)
+./vault status
+./vault status --vault-path ~/VaultBackup
+```
+
+## Key Decisions
+
+**Why Two Tiers?**
+- Tier 1 (git): Quick setup on new machine with just git clone
+- Tier 2 (vault): Full restore with all personal data
+- Keeps git repo lightweight and fast
+- Vault can live on external drive/NAS
+
+**Why rsync for home dirs?**
+- Efficient incremental backups
+- Preserves permissions and metadata
+- Progress indicators for large files
+- Standard tool, reliable
+
+**Testing Strategy**:
+- TDD approach: write tests first
+- Target >75% coverage per module
+- Use temp directories, never modify real files
+- Comprehensive error case coverage
