@@ -6,6 +6,8 @@ defmodule Vault.Backup.HomeDirs do
   Files are saved to vault/home/ (NOT committed to git).
   """
 
+  alias Vault.UI.Progress
+
   # Common files/directories to exclude from backup
   @exclude_patterns [
     ".DS_Store",
@@ -141,49 +143,27 @@ defmodule Vault.Backup.HomeDirs do
     }
   end
 
-  # Copy directory with progress tracking
   defp copy_directory_with_progress(source, dest, exclude_patterns, progress_id) do
     use_rsync = rsync_available?()
     if use_rsync do
-      # Preflight dry-run to determine exact transfer count
       count = compute_transfers_count(source, dest, exclude_patterns)
 
       if count == 0 do
-        Owl.IO.puts(["  ", Path.basename(source), " ", Owl.Data.tag("(Done)", :green)])
+        File.mkdir_p!(dest)
+        Progress.puts(["  ", Path.basename(source), " ", Progress.tag("(Done)", :green)])
         :ok
       else
-        Owl.ProgressBar.start(
-          id: progress_id,
-          label: "  #{Path.basename(source)}",
-          total: count,
-          bar_width_ratio: 0.5,
-          filled_symbol: "█",
-          partial_symbols: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
-        )
+        Progress.start_progress(progress_id, "  #{Path.basename(source)}", count)
 
-        result = copy_with_rsync(source, dest, exclude_patterns, progress_id)
-        Owl.LiveScreen.await_render()
-        result
+        copy_with_rsync(source, dest, exclude_patterns, progress_id)
       end
     else
       total_files = max(count_files(source, exclude_patterns), 1)
 
-      Owl.ProgressBar.start(
-        id: progress_id,
-        label: "  #{Path.basename(source)}",
-        total: total_files,
-        bar_width_ratio: 0.5,
-        filled_symbol: "█",
-        partial_symbols: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
-      )
+      Progress.start_progress(progress_id, "  #{Path.basename(source)}", total_files)
 
-      # Remove destination if it exists (for clean copy)
       File.rm_rf(dest)
-      # Copy recursively with progress updates
-      result = copy_with_exclusions(source, dest, exclude_patterns, progress_id)
-
-      Owl.LiveScreen.await_render()
-      result
+      copy_with_exclusions(source, dest, exclude_patterns, progress_id)
     end
   end
 
@@ -206,10 +186,7 @@ defmodule Vault.Backup.HomeDirs do
 
   # Check if rsync is available on the system
   defp rsync_available? do
-    case System.cmd("which", ["rsync"], stderr_to_stdout: true) do
-      {_, 0} -> true
-      _ -> false
-    end
+    not is_nil(System.find_executable("rsync"))
   end
 
   # Copy directory using rsync for better performance
@@ -256,13 +233,8 @@ defmodule Vault.Backup.HomeDirs do
               "" -> :ok
               "sending incremental file list" -> :ok
               _ ->
-                # rsync prints directories with trailing '/'; only increment for files
                 if not String.ends_with?(line, "/") do
-                  Owl.ProgressBar.inc(id: progress_id)
-                  # throttle rendering to keep UI responsive
-                  if rem(acc + 1, 200) == 0 do
-                    Owl.LiveScreen.await_render()
-                  end
+                  Progress.increment(progress_id)
                   acc + 1
                 else
                   acc
@@ -272,8 +244,6 @@ defmodule Vault.Backup.HomeDirs do
         stream_rsync_and_increment(port, progress_id, rest, new_count)
 
       {^port, {:exit_status, 0}} ->
-        # final flush
-        Owl.LiveScreen.await_render()
         :ok
 
       {^port, {:exit_status, _status}} ->
@@ -338,7 +308,7 @@ defmodule Vault.Backup.HomeDirs do
             else
               # Increment progress
               if progress_id do
-                Owl.ProgressBar.inc(id: progress_id)
+                Progress.increment(progress_id)
               end
 
               # Copy file, skip if it fails (sockets, special files, etc.)

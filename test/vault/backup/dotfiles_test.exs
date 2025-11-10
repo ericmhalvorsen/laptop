@@ -8,7 +8,6 @@ defmodule Vault.Backup.DotfilesTest do
     setup :setup_test_env
 
     test "backs up common dotfiles from source to dest", %{source: source, dest: dest} do
-      # Create mock dotfiles in source
       create_test_files(source, %{
         ".zshrc" => "# ZSH config",
         ".bashrc" => "# Bash config",
@@ -16,11 +15,10 @@ defmodule Vault.Backup.DotfilesTest do
         ".vimrc" => "set number"
       })
 
-      assert {:ok, result} = Dotfiles.backup(source, dest)
+      assert {:ok, result } = Dotfiles.backup(source, dest)
       assert result.files_copied >= 4
       assert result.total_size > 0
 
-      # Verify files were copied
       assert File.exists?(Path.join(dest, ".zshrc"))
       assert File.exists?(Path.join(dest, ".bashrc"))
       assert File.exists?(Path.join(dest, ".gitconfig"))
@@ -60,10 +58,8 @@ defmodule Vault.Backup.DotfilesTest do
     end
 
     test "skips non-existent dotfiles gracefully", %{source: source, dest: dest} do
-      # Only create one dotfile
       create_test_file(Path.join(source, ".zshrc"), "# ZSH config")
 
-      # Should not fail even though other dotfiles don't exist
       assert {:ok, result} = Dotfiles.backup(source, dest)
       assert result.files_copied >= 1
     end
@@ -78,6 +74,7 @@ defmodule Vault.Backup.DotfilesTest do
       nested_dest = Path.join([dest, "deeply", "nested", "dotfiles"])
 
       assert {:ok, _result} = Dotfiles.backup(source, nested_dest)
+
       assert File.dir?(nested_dest)
       assert File.exists?(Path.join(nested_dest, ".zshrc"))
     end
@@ -96,7 +93,6 @@ defmodule Vault.Backup.DotfilesTest do
         "helper" => "#!/bin/zsh\n# Helper script"
       })
 
-      # Make scripts executable
       File.chmod!(Path.join(local_bin_src, "script1"), 0o755)
       File.chmod!(Path.join(local_bin_src, "script2"), 0o755)
       File.chmod!(Path.join(local_bin_src, "helper"), 0o755)
@@ -104,7 +100,6 @@ defmodule Vault.Backup.DotfilesTest do
       assert {:ok, result} = Dotfiles.backup_local_bin(source, dest)
       assert result.files_copied == 3
 
-      # Verify scripts were copied
       assert File.exists?(Path.join(dest, "script1"))
       assert File.exists?(Path.join(dest, "script2"))
       assert File.exists?(Path.join(dest, "helper"))
@@ -123,9 +118,7 @@ defmodule Vault.Backup.DotfilesTest do
       dest_script = Path.join(dest, "executable")
       assert File.exists?(dest_script)
 
-      # Check permissions
       {:ok, stat} = File.stat(dest_script)
-      # Extract permission bits (last 9 bits)
       perms = stat.mode &&& 0o777
       assert perms == 0o755
     end
@@ -139,7 +132,6 @@ defmodule Vault.Backup.DotfilesTest do
     end
 
     test "handles missing .local/bin directory gracefully", %{source: source, dest: dest} do
-      # Don't create .local/bin at all
       assert {:ok, result} = Dotfiles.backup_local_bin(source, dest)
       assert result.files_copied == 0
     end

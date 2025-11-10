@@ -10,6 +10,7 @@ defmodule Vault.Backup.Dotfiles do
   """
 
   alias Vault.Utils.FileUtils
+  alias Vault.UI.Progress
 
   @doc """
   Lists all dotfiles and dot directories in the given directory.
@@ -88,56 +89,58 @@ defmodule Vault.Backup.Dotfiles do
          :ok <- File.mkdir_p(dest_dir) do
       dotfiles = list_dotfiles(source_dir)
 
-      Owl.ProgressBar.start(
-        id: :dotfiles,
-        label: "  Dotfiles",
-        total: length(dotfiles),
-        bar_width_ratio: 0.5,
-        filled_symbol: "█",
-        partial_symbols: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
-      )
+      if Enum.empty?(dotfiles) do
+        {:ok,
+         %{
+           files_copied: 0,
+           files_skipped: 0,
+           total_size: 0,
+           backed_up_files: []
+         }}
+      else
 
-      results =
-        Enum.map(dotfiles, fn dotfile ->
-          source = Path.join(source_dir, dotfile)
-          dest = Path.join(dest_dir, dotfile)
+        Progress.start_progress(:dotfiles, "  Dotfiles", length(dotfiles))
 
-          result =
-            cond do
-              File.dir?(source) -> copy_directory(source, dest)
-              File.regular?(source) -> copy_with_size(source, dest)
-              true -> {:error, :not_regular}
-            end
+        results =
+          Enum.map(dotfiles, fn dotfile ->
+            source = Path.join(source_dir, dotfile)
+            dest = Path.join(dest_dir, dotfile)
 
-          Owl.ProgressBar.inc(id: :dotfiles)
-          result
-        end)
+            result =
+              cond do
+                File.dir?(source) -> copy_directory(source, dest)
+                File.regular?(source) -> copy_with_size(source, dest)
+                true -> {:error, :not_regular}
+              end
 
-      Owl.LiveScreen.await_render()
+            Progress.increment(:dotfiles)
+            result
+          end)
 
-      files_copied = Enum.count(results, &match?({:ok, _}, &1))
-      files_skipped = Enum.count(results, &match?({:error, _}, &1))
+        files_copied = Enum.count(results, &match?({:ok, _}, &1))
+        files_skipped = Enum.count(results, &match?({:error, _}, &1))
 
-      total_size =
-        results
-        |> Enum.filter(&match?({:ok, _}, &1))
-        |> Enum.map(fn {:ok, size} -> size end)
-        |> Enum.sum()
+        total_size =
+          results
+          |> Enum.filter(&match?({:ok, _}, &1))
+          |> Enum.map(fn {:ok, size} -> size end)
+          |> Enum.sum()
 
-      backed_up_files =
-        results
-        |> Enum.zip(dotfiles)
-        |> Enum.filter(fn {result, _file} -> match?({:ok, _size}, result) end)
-        |> Enum.map(fn {_result, file} -> file end)
+        backed_up_files =
+          results
+          |> Enum.zip(dotfiles)
+          |> Enum.filter(fn {result, _file} -> match?({:ok, _size}, result) end)
+          |> Enum.map(fn {_result, file} -> file end)
 
-      result = %{
-        files_copied: files_copied,
-        files_skipped: files_skipped,
-        total_size: total_size,
-        backed_up_files: backed_up_files
-      }
+        result = %{
+          files_copied: files_copied,
+          files_skipped: files_skipped,
+          total_size: total_size,
+          backed_up_files: backed_up_files
+        }
 
-      {:ok, result}
+        {:ok, result}
+      end
     else
       {:error, reason} -> {:error, reason}
       false -> {:error, "source directory does not exist: #{source_dir}"}
@@ -174,15 +177,7 @@ defmodule Vault.Backup.Dotfiles do
         if Enum.empty?(files) do
           return_empty_result()
         else
-          # Start progress bar
-          Owl.ProgressBar.start(
-            id: :local_bin,
-            label: "  Scripts",
-            total: length(files),
-            bar_width_ratio: 0.5,
-            filled_symbol: "█",
-            partial_symbols: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
-          )
+          Progress.start_progress(:local_bin, "  Scripts", length(files))
 
           results =
             files
@@ -209,11 +204,9 @@ defmodule Vault.Backup.Dotfiles do
                     {:skipped, :not_regular_file}
                 end
 
-              Owl.ProgressBar.inc(id: :local_bin)
+              Progress.increment(:local_bin)
               result
             end)
-
-          Owl.LiveScreen.await_render()
 
           files_copied = Enum.count(results, &match?({:ok, _}, &1))
           files_skipped = Enum.count(results, fn r -> not match?({:ok, _}, r) end)

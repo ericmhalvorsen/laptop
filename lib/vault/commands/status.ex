@@ -3,40 +3,41 @@ defmodule Vault.Commands.Status do
   Command to show the status of the vault.
   """
 
+  alias Vault.UI.Progress
+
   def run(_args, opts) do
     vault_path = get_vault_path(opts)
 
-    Owl.IO.puts([
-      Owl.Data.tag("\n📊 Vault Status", :cyan),
+    Progress.puts([
+      Progress.tag("\n📊 Vault Status", :cyan),
       "\n\n",
       "Vault path: ",
-      Owl.Data.tag(vault_path, :yellow),
+      Progress.tag(vault_path, :yellow),
       "\n"
     ])
 
     if File.exists?(vault_path) do
       show_vault_status(vault_path)
     else
-      Owl.IO.puts([
+      Progress.puts([
         "\n",
-        Owl.Data.tag("⚠ Vault not found", :yellow),
+        Progress.tag("⚠ Vault not found", :yellow),
         "\n\n",
         "Run ",
-        Owl.Data.tag("vault save", :cyan),
+        Progress.tag("vault save", :cyan),
         " to create your first backup.\n"
       ])
     end
   end
 
   defp show_vault_status(vault_path) do
-    # TODO: Implement actual status checking
     Owl.Box.new([
-      Owl.Data.tag("✓ Vault exists", :green),
+      Progress.tag("✓ Vault exists", :green),
       "\n\n",
       "Location: #{vault_path}\n",
-      "\nStatus checking coming soon!"
+      "\nThis doesn't do anything right now"
     ])
-    |> Owl.IO.puts()
+    |> Progress.puts()
   end
 
   defp get_vault_path(opts) do

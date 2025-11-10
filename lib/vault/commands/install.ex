@@ -3,14 +3,16 @@ defmodule Vault.Commands.Install do
   Install applications defined in config/apps.yaml.
   """
 
+  alias Vault.UI.Progress
+
   def run(_args, opts) do
     manifest = load_manifest()
 
-    Owl.IO.puts([
-      Owl.Data.tag("\n📦 App Installation", :cyan),
+    Progress.puts([
+      Progress.tag("\n📦 App Installation", :cyan),
       "\n\n",
       "Manifest: ",
-      Owl.Data.tag("config/apps.yaml", :yellow),
+      Progress.tag("config/apps.yaml", :yellow),
       "\n"
     ])
 
@@ -19,7 +21,7 @@ defmodule Vault.Commands.Install do
     install_local_dmgs(manifest, opts)
     handle_direct_downloads(manifest, opts)
 
-    Owl.IO.puts(["\n", Owl.Data.tag("✓ Install complete", :green), "\n"])
+    Progress.puts(["\n", Progress.tag("✓ Install complete", :green), "\n"])
   end
 
   defp load_manifest do
@@ -28,7 +30,7 @@ defmodule Vault.Commands.Install do
     case YamlElixir.read_from_file(path) do
       {:ok, doc} -> doc
       {:error, reason} ->
-        Owl.IO.puts([Owl.Data.tag("✗ Failed to read config/apps.yaml: ", :red), inspect(reason)])
+        Progress.puts([Progress.tag("✗ Failed to read config/apps.yaml: ", :red), inspect(reason)])
         System.halt(1)
     end
   end
@@ -40,7 +42,7 @@ defmodule Vault.Commands.Install do
 
     cond do
       File.exists?(brewfile) ->
-        Owl.IO.puts(["\n", Owl.Data.tag("▶ Installing via Brewfile", :cyan), "\n"])
+        Progress.puts(["\n", Progress.tag("▶ Installing via Brewfile", :cyan), "\n"])
         brew_bundle(brewfile, dry)
 
       true ->
@@ -48,12 +50,12 @@ defmodule Vault.Commands.Install do
         casks = Map.get(brew, "casks", [])
 
         if formulas != [] do
-          Owl.IO.puts(["\n", Owl.Data.tag("▶ Installing brew formulas", :cyan), "\n"])
+          Progress.puts(["\n", Progress.tag("▶ Installing brew formulas", :cyan), "\n"])
           Enum.each(formulas, fn f -> brew_install(["install", f], dry) end)
         end
 
         if casks != [] do
-          Owl.IO.puts(["\n", Owl.Data.tag("▶ Installing brew casks", :cyan), "\n"])
+          Progress.puts(["\n", Progress.tag("▶ Installing brew casks", :cyan), "\n"])
           Enum.each(casks, fn c -> brew_install(["install", "--cask", c], dry) end)
         end
     end
@@ -62,24 +64,26 @@ defmodule Vault.Commands.Install do
   defp install_brew(_manifest, _opts), do: :ok
 
   defp brew_install(args, true) do
-    Owl.IO.puts(["  ", Owl.Data.tag("dry-run:", :light_black), " brew ", Enum.join(args, " ")])
+    Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " brew ", Enum.join(args, " ")])
   end
 
   defp brew_install(args, false) do
-    case System.cmd("brew", args, into: IO.stream(:stdio, :line)) do
+    brew = System.find_executable("brew") || "brew"
+    case System.cmd(brew, args, into: IO.stream(:stdio, :line)) do
       {_out, 0} -> :ok
-      {out, code} -> Owl.IO.puts([Owl.Data.tag("✗ brew failed (#{code})\n", :red), out])
+      {out, code} -> Progress.puts([Progress.tag("✗ brew failed (#{code})\n", :red), out])
     end
   end
 
   defp brew_bundle(file, true) do
-    Owl.IO.puts(["  ", Owl.Data.tag("dry-run:", :light_black), " brew bundle --file=", file])
+    Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " brew bundle --file=", file])
   end
 
   defp brew_bundle(file, false) do
-    case System.cmd("brew", ["bundle", "--file=" <> file], into: IO.stream(:stdio, :line)) do
+    brew = System.find_executable("brew") || "brew"
+    case System.cmd(brew, ["bundle", "--file=" <> file], into: IO.stream(:stdio, :line)) do
       {_out, 0} -> :ok
-      {out, code} -> Owl.IO.puts([Owl.Data.tag("✗ brew bundle failed (#{code})\n", :red), out])
+      {out, code} -> Progress.puts([Progress.tag("✗ brew bundle failed (#{code})\n", :red), out])
     end
   end
 
@@ -87,7 +91,7 @@ defmodule Vault.Commands.Install do
     dry = opts[:dry_run] == true
     installers_dir = resolve_installers_dir(manifest, opts)
 
-    Owl.IO.puts(["\n", Owl.Data.tag("▶ Installing local .pkg installers", :cyan), "\n"])
+    Progress.puts(["\n", Progress.tag("▶ Installing local .pkg installers", :cyan), "\n"])
 
     Enum.each(pkgs, fn item ->
       name = item_name(item)
@@ -107,9 +111,9 @@ defmodule Vault.Commands.Install do
         [] ->
           msg = "Missing installer for #{name} at #{pkg_pattern}"
           if optional do
-            Owl.IO.puts([Owl.Data.tag("! ", :yellow), msg])
+            Progress.puts([Progress.tag("! ", :yellow), msg])
           else
-            Owl.IO.puts([Owl.Data.tag("! ", :yellow), msg])
+            Progress.puts([Progress.tag("! ", :yellow), msg])
           end
       end
     end)
@@ -118,19 +122,19 @@ defmodule Vault.Commands.Install do
   defp install_local_pkgs(_manifest, _opts), do: :ok
 
   defp run_pkg(name, path, requires_sudo, true) do
-    Owl.IO.puts(["  ", Owl.Data.tag("dry-run:", :light_black), " installer -pkg ", path, " -target /"])
+    Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " installer -pkg ", path, " -target /"])
     if requires_sudo, do: :ok, else: :ok
-    Owl.IO.puts(["  ", Owl.Data.tag("would install:", :light_black), " ", name])
+    Progress.puts(["  ", Progress.tag("would install:", :light_black), " ", name])
   end
 
   defp run_pkg(name, path, requires_sudo, false) do
-    Owl.IO.puts(["  Installing ", Owl.Data.tag(name, :green), " from ", path])
+    Progress.puts(["  Installing ", Progress.tag(name, :green), " from ", path])
     cmd = if requires_sudo, do: "sudo", else: "installer"
     args = if requires_sudo, do: ["installer", "-pkg", path, "-target", "/"], else: ["-pkg", path, "-target", "/"]
 
     case System.cmd(cmd, args, into: IO.stream(:stdio, :line)) do
       {_out, 0} -> :ok
-      {out, code} -> Owl.IO.puts([Owl.Data.tag("✗ installer failed (#{code})\n", :red), out])
+      {out, code} -> Progress.puts([Progress.tag("✗ installer failed (#{code})\n", :red), out])
     end
   end
 
@@ -142,8 +146,8 @@ defmodule Vault.Commands.Install do
       case item["id"] do
         "postgres-app" -> postgres_app_install(item, dry)
         _ ->
-          Owl.IO.puts([Owl.Data.tag("! Skipping direct download installer for ", :yellow), to_string(id),
-            Owl.Data.tag(" (not yet implemented)", :light_black)])
+          Progress.puts([Progress.tag("! Skipping direct download installer for ", :yellow), to_string(id),
+            Progress.tag(" (not yet implemented)", :light_black)])
       end
     end)
   end
@@ -151,11 +155,11 @@ defmodule Vault.Commands.Install do
   defp handle_direct_downloads(_manifest, _opts), do: :ok
 
   defp postgres_app_install(_item, true) do
-    Owl.IO.puts(["  ", Owl.Data.tag("dry-run:", :light_black), " Install Postgres.app from official site (manual step)"])
+    Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " Install Postgres.app from official site (manual step)"])
   end
 
   defp postgres_app_install(_item, false) do
-    Owl.IO.puts([Owl.Data.tag("! Postgres.app automated install not implemented yet. Please install from https://postgresapp.com/", :yellow)])
+    Progress.puts([Progress.tag("! Postgres.app automated install not implemented yet. Please install from https://postgresapp.com/", :yellow)])
   end
 
   defp item_name(item) do
@@ -208,11 +212,11 @@ defmodule Vault.Commands.Install do
               detach_dmg(mount, dry)
             end
           else
-            {:error, reason} -> Owl.IO.puts([Owl.Data.tag("! Failed to attach DMG: ", :yellow), to_string(reason)])
+            {:error, reason} -> Progress.puts([Progress.tag("! Failed to attach DMG: ", :yellow), to_string(reason)])
           end
         [] ->
           msg = "Missing DMG for #{name} at #{dmg_pattern}"
-          if optional, do: Owl.IO.puts([Owl.Data.tag("! ", :yellow), msg]), else: Owl.IO.puts([Owl.Data.tag("! ", :yellow), msg])
+          if optional, do: Progress.puts([Progress.tag("! ", :yellow), msg]), else: Progress.puts([Progress.tag("! ", :yellow), msg])
       end
     end)
   end
@@ -220,7 +224,7 @@ defmodule Vault.Commands.Install do
   defp install_local_dmgs(_manifest, _opts), do: :ok
 
   defp attach_dmg(path, true) do
-    Owl.IO.puts(["  ", Owl.Data.tag("dry-run:", :light_black), " hdiutil attach -nobrowse ", path])
+    Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " hdiutil attach -nobrowse ", path])
     {:ok, "/Volumes/DRYRUN"}
   end
 
@@ -253,11 +257,11 @@ defmodule Vault.Commands.Install do
   end
 
   defp handle_dmg_contents(mount, nil, true) do
-    Owl.IO.puts(["  ", Owl.Data.tag("dry-run:", :light_black), " would open ", mount, " for manual installation."])
+    Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " would open ", mount, " for manual installation."])
   end
 
   defp handle_dmg_contents(mount, nil, false) do
-    Owl.IO.puts([Owl.Data.tag("! No app_name specified for ", :yellow), mount, ". Opening volume for manual install..."])
+    Progress.puts([Progress.tag("! No app_name specified for ", :yellow), mount, ". Opening volume for manual install..."])
     _ = System.cmd("open", [mount])
     :ok
   end
@@ -271,9 +275,9 @@ defmodule Vault.Commands.Install do
     case File.exists?(src) do
       true ->
         {out, code} = System.cmd("cp", ["-R", src, "/Applications/"], stderr_to_stdout: true)
-        if code == 0, do: :ok, else: Owl.IO.puts([Owl.Data.tag("✗ Failed to copy app (#{code})\n", :red), out])
+        if code == 0, do: :ok, else: Progress.puts([Progress.tag("✗ Failed to copy app (#{code})\n", :red), out])
       false ->
-        Owl.IO.puts([Owl.Data.tag("! App not found in mounted volume: ", :yellow), src, ". Opening volume..."])
+        Progress.puts([Progress.tag("! App not found in mounted volume: ", :yellow), src, ". Opening volume..."])
         _ = System.cmd("open", [mount])
         :ok
     end

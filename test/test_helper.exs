@@ -1,4 +1,5 @@
 # Configure ExUnit
+System.put_env("DISABLE_VAULT_OUTPUT", "1")
 ExUnit.start()
 
 # Exclude slow tests by default (run with: mix test --include slow)

@@ -2,6 +2,26 @@ defmodule Vault.Backup.HomebrewTest do
   use ExUnit.Case
   alias Vault.Backup.Homebrew
 
+  # Provide a simple mock for brew
+  def mock_brew(_cmd, args, _opts) do
+    cond do
+      args == ["list", "--formula"] ->
+        {"git\nelixir\n", 0}
+      args == ["list", "--cask"] ->
+        {"warp\n", 0}
+      args == ["tap"] ->
+        {"homebrew/core\n", 0}
+      String.starts_with?(Enum.join(args, " "), "bundle dump") ->
+        file_arg = Enum.find(args, &String.starts_with?(&1, "--file="))
+        path = String.replace_prefix(file_arg, "--file=", "")
+        File.mkdir_p!(Path.dirname(path))
+        File.write!(path, "tap \"homebrew/core\"\nbrew \"git\"\n")
+        {"", 0}
+      true ->
+        {"", 0}
+    end
+  end
+
   setup do
     # Create temp directory for test backup destination
     dest_dir = Path.join(System.tmp_dir!(), "vault_homebrew_test_#{:rand.uniform(10000)}")
@@ -18,7 +38,7 @@ defmodule Vault.Backup.HomebrewTest do
   describe "backup/1" do
     test "creates brew directory and all required files", %{dest_dir: dest_dir} do
       # Act
-      assert {:ok, result} = Homebrew.backup(dest_dir)
+      assert {:ok, result} = Homebrew.backup(dest_dir, cmd: &__MODULE__.mock_brew/3)
 
       # Assert - verify brew directory exists
       brew_dir = Path.join(dest_dir, "brew")
@@ -39,7 +59,7 @@ defmodule Vault.Backup.HomebrewTest do
 
     test "Brewfile contains tap and brew entries", %{dest_dir: dest_dir} do
       # Act
-      assert {:ok, _result} = Homebrew.backup(dest_dir)
+      assert {:ok, _result} = Homebrew.backup(dest_dir, cmd: &__MODULE__.mock_brew/3)
 
       # Assert
       brewfile = Path.join([dest_dir, "brew", "Brewfile"])
@@ -52,7 +72,7 @@ defmodule Vault.Backup.HomebrewTest do
 
     test "formulas.txt contains installed formulas", %{dest_dir: dest_dir} do
       # Act
-      assert {:ok, result} = Homebrew.backup(dest_dir)
+      assert {:ok, result} = Homebrew.backup(dest_dir, cmd: &__MODULE__.mock_brew/3)
 
       # Assert
       formulas_file = Path.join([dest_dir, "brew", "formulas.txt"])
@@ -65,7 +85,7 @@ defmodule Vault.Backup.HomebrewTest do
 
     test "casks.txt contains installed casks", %{dest_dir: dest_dir} do
       # Act
-      assert {:ok, result} = Homebrew.backup(dest_dir)
+      assert {:ok, result} = Homebrew.backup(dest_dir, cmd: &__MODULE__.mock_brew/3)
 
       # Assert
       casks_file = Path.join([dest_dir, "brew", "casks.txt"])
@@ -78,7 +98,7 @@ defmodule Vault.Backup.HomebrewTest do
 
     test "taps.txt contains tapped repositories", %{dest_dir: dest_dir} do
       # Act
-      assert {:ok, result} = Homebrew.backup(dest_dir)
+      assert {:ok, result} = Homebrew.backup(dest_dir, cmd: &__MODULE__.mock_brew/3)
 
       # Assert
       taps_file = Path.join([dest_dir, "brew", "taps.txt"])
@@ -96,8 +116,8 @@ defmodule Vault.Backup.HomebrewTest do
       dest_dir = Path.join(System.tmp_dir!(), "vault_homebrew_noinstall_#{:rand.uniform(10000)}")
       File.mkdir_p!(dest_dir)
 
-      # We expect this to succeed if brew is installed
-      result = Homebrew.backup(dest_dir)
+      # Use mock brew to ensure deterministic success
+      result = Homebrew.backup(dest_dir, cmd: &__MODULE__.mock_brew/3)
 
       # Either success (brew installed) or specific error (brew not installed)
       assert match?({:ok, _}, result) or match?({:error, _}, result)
@@ -111,7 +131,7 @@ defmodule Vault.Backup.HomebrewTest do
       refute File.dir?(brew_dir)
 
       # Act
-      assert {:ok, _result} = Homebrew.backup(dest_dir)
+      assert {:ok, _result} = Homebrew.backup(dest_dir, cmd: &__MODULE__.mock_brew/3)
 
       # Assert
       assert File.dir?(brew_dir)
@@ -119,14 +139,14 @@ defmodule Vault.Backup.HomebrewTest do
 
     test "overwrites existing files on subsequent backups", %{dest_dir: dest_dir} do
       # First backup
-      assert {:ok, result1} = Homebrew.backup(dest_dir)
+      assert {:ok, result1} = Homebrew.backup(dest_dir, cmd: &__MODULE__.mock_brew/3)
 
       # Modify a file
       brewfile = Path.join([dest_dir, "brew", "Brewfile"])
       File.write!(brewfile, "# Modified content")
 
       # Second backup
-      assert {:ok, result2} = Homebrew.backup(dest_dir)
+      assert {:ok, result2} = Homebrew.backup(dest_dir, cmd: &__MODULE__.mock_brew/3)
 
       # Verify it was overwritten (content should be regenerated)
       new_content = File.read!(brewfile)
@@ -141,7 +161,7 @@ defmodule Vault.Backup.HomebrewTest do
       # Try to backup to a file instead of directory
       invalid_dest = "/dev/null"
 
-      result = Homebrew.backup(invalid_dest)
+      result = Homebrew.backup(invalid_dest, cmd: &__MODULE__.mock_brew/3)
 
       assert {:error, _reason} = result
     end
@@ -150,7 +170,7 @@ defmodule Vault.Backup.HomebrewTest do
   describe "backup/2 with options" do
     test "accepts dry_run option and doesn't write files", %{dest_dir: dest_dir} do
       # Act
-      assert {:ok, result} = Homebrew.backup(dest_dir, dry_run: true)
+      assert {:ok, result} = Homebrew.backup(dest_dir, dry_run: true, cmd: &__MODULE__.mock_brew/3)
 
       # Assert - brew directory should NOT be created in dry run
       brew_dir = Path.join(dest_dir, "brew")
@@ -165,21 +185,21 @@ defmodule Vault.Backup.HomebrewTest do
   describe "helper functions for edge cases" do
     test "handles empty formula list gracefully", %{dest_dir: dest_dir} do
       # This tests internal behavior - if no formulas, file should be created but empty/minimal
-      assert {:ok, _result} = Homebrew.backup(dest_dir)
+      assert {:ok, _result} = Homebrew.backup(dest_dir, cmd: &__MODULE__.mock_brew/3)
 
       formulas_file = Path.join([dest_dir, "brew", "formulas.txt"])
       assert File.exists?(formulas_file)
     end
 
     test "handles empty cask list gracefully", %{dest_dir: dest_dir} do
-      assert {:ok, _result} = Homebrew.backup(dest_dir)
+      assert {:ok, _result} = Homebrew.backup(dest_dir, cmd: &__MODULE__.mock_brew/3)
 
       casks_file = Path.join([dest_dir, "brew", "casks.txt"])
       assert File.exists?(casks_file)
     end
 
     test "validates files have correct line endings", %{dest_dir: dest_dir} do
-      assert {:ok, _result} = Homebrew.backup(dest_dir)
+      assert {:ok, _result} = Homebrew.backup(dest_dir, cmd: &__MODULE__.mock_brew/3)
 
       # All text files should end with newline
       for file <- ["formulas.txt", "casks.txt", "taps.txt"] do
@@ -195,7 +215,7 @@ defmodule Vault.Backup.HomebrewTest do
     end
 
     test "all files are created even if some lists are empty", %{dest_dir: dest_dir} do
-      assert {:ok, result} = Homebrew.backup(dest_dir)
+      assert {:ok, result} = Homebrew.backup(dest_dir, cmd: &__MODULE__.mock_brew/3)
 
       # All files should exist regardless of whether there are items
       assert File.exists?(Path.join([dest_dir, "brew", "Brewfile"]))

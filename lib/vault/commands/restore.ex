@@ -3,36 +3,44 @@ defmodule Vault.Commands.Restore do
   Command to restore macOS configuration from the vault.
   """
   import Bitwise
+  alias Vault.UI.Progress
 
   def run(_args, opts) do
     vault_path = get_vault_path(opts)
     dry_run = opts[:dry_run] == true
     home_dir = System.user_home!()
+    obsidian_dest = opts[:obsidian_dest] || Path.join([home_dir, "Documents", "Obsidian"])
 
-    Owl.IO.puts([
-      Owl.Data.tag("\n📂 Vault Restore", :cyan),
+    Progress.puts([
+      Progress.tag("\n📂 Vault Restore", :cyan),
       "\n\n",
       "Vault path: ",
-      Owl.Data.tag(vault_path, :yellow),
+      Progress.tag(vault_path, :yellow),
       "\n"
     ])
 
-    Owl.IO.puts(["\n", Owl.Data.tag("▶ Restoring home directories", :cyan), "\n"])
+    Progress.puts(["\n", Progress.tag("▶ Restoring home directories", :cyan), "\n"])
     restore_home_dirs(vault_path, home_dir, dry_run)
 
-    Owl.IO.puts(["\n", Owl.Data.tag("▶ Restoring fonts", :cyan), "\n"])
+    Progress.puts(["\n", Progress.tag("▶ Restoring fonts", :cyan), "\n"])
     restore_fonts(vault_path, home_dir, dry_run)
 
-    Owl.IO.puts(["\n", Owl.Data.tag("▶ Restoring dotfiles and ~/.local/bin", :cyan), "\n"])
+    Progress.puts(["\n", Progress.tag("▶ Restoring dotfiles and ~/.local/bin", :cyan), "\n"])
     restore_dotfiles_and_local_bin(vault_path, home_dir, dry_run)
 
-    Owl.IO.puts(["\n", Owl.Data.tag("▶ Restoring Application Support", :cyan), "\n"])
+    Progress.puts(["\n", Progress.tag("▶ Restoring Application Support", :cyan), "\n"])
     restore_app_support(vault_path, home_dir, dry_run)
 
-    Owl.IO.puts(["\n", Owl.Data.tag("▶ Running app install", :cyan), "\n"])
+    Progress.puts(["\n", Progress.tag("▶ Restoring Brave (browser)", :cyan), "\n"])
+    restore_brave(vault_path, home_dir, dry_run)
+
+    Progress.puts(["\n", Progress.tag("▶ Restoring Obsidian vaults", :cyan), "\n"])
+    restore_obsidian(vault_path, obsidian_dest, dry_run)
+
+    Progress.puts(["\n", Progress.tag("▶ Running app install", :cyan), "\n"])
     Vault.Commands.Install.run([], opts)
 
-    Owl.IO.puts(["\n", Owl.Data.tag("✓ Restore complete", :green), "\n"])
+    Progress.puts(["\n", Progress.tag("✓ Restore complete", :green), "\n"])
   end
 
   defp restore_home_dirs(vault_path, home_dir, dry_run) do
@@ -50,7 +58,7 @@ defmodule Vault.Commands.Restore do
         _ -> :ok
       end
     else
-      Owl.IO.puts([Owl.Data.tag("  ℹ ", :yellow), "No home data found in vault/home/"])
+      Progress.puts([Progress.tag("  ℹ ", :yellow), "No home data found in vault/home/"])
     end
   end
 
@@ -61,7 +69,7 @@ defmodule Vault.Commands.Restore do
     if File.dir?(fonts_src) do
       copy_tree(fonts_src, fonts_dest, dry_run)
     else
-      Owl.IO.puts([Owl.Data.tag("  ℹ ", :yellow), "No fonts found in vault/fonts/"])
+      Progress.puts([Progress.tag("  ℹ ", :yellow), "No fonts found in vault/fonts/"])
     end
   end
 
@@ -81,7 +89,7 @@ defmodule Vault.Commands.Restore do
         _ -> :ok
       end
     else
-      Owl.IO.puts([Owl.Data.tag("  ℹ ", :yellow), "No dotfiles found in vault/dotfiles/"])
+      Progress.puts([Progress.tag("  ℹ ", :yellow), "No dotfiles found in vault/dotfiles/"])
     end
 
     # ~/.local/bin scripts
@@ -114,12 +122,58 @@ defmodule Vault.Commands.Restore do
     if File.dir?(src) do
       copy_tree(src, dest, dry_run)
     else
-      Owl.IO.puts([Owl.Data.tag("  ℹ ", :yellow), "No Application Support data found in vault/app-support/"])
+      Progress.puts([Progress.tag("  ℹ ", :yellow), "No Application Support data found in vault/app-support/"])
+    end
+  end
+
+  # -- Step 3a: Brave --
+  defp restore_brave(vault_path, home_dir, dry_run) do
+    src = Path.join([vault_path, "browser", "brave"])
+    dest = Path.join([home_dir, "Library", "Application Support", "BraveSoftware", "Brave-Browser"])
+    if File.dir?(src) do
+      Progress.puts(["  ", Progress.tag("ℹ ", :yellow), "Ensure Brave is closed before restoring."])
+      copy_tree_with_excludes(src, dest, dry_run, [
+        "Cache/",
+        "Code Cache/",
+        "GPUCache/",
+        "ShaderCache/",
+        "GrShaderCache/",
+        "DawnCache/",
+        "Crashpad/",
+        "SwReporter/",
+        "Safe Browsing/",
+        "Service Worker/CacheStorage/"
+      ])
+      Progress.puts(["  ", Progress.tag("ℹ ", :yellow), "Passwords/cookies are Keychain-bound and may not transfer. Use Brave Sync or password export/import."])
+    else
+      Progress.puts([Progress.tag("  ℹ ", :yellow), "No Brave data found in vault/browser/brave/"])
+    end
+  end
+
+  # -- Step 3b: Obsidian --
+  defp restore_obsidian(vault_path, dest_base, dry_run) do
+    src_base = Path.join([vault_path, "obsidian"])
+    if File.dir?(src_base) do
+      Progress.puts(["  ", Progress.tag("ℹ ", :yellow), "Ensure Obsidian is closed before restoring."])
+      File.mkdir_p!(dest_base)
+      case File.ls(src_base) do
+        {:ok, entries} ->
+          entries
+          |> Enum.filter(fn v -> File.dir?(Path.join(src_base, v)) end)
+          |> Enum.each(fn v ->
+            src = Path.join(src_base, v)
+            dest = Path.join(dest_base, v)
+            copy_tree(src, dest, dry_run)
+          end)
+        _ -> :ok
+      end
+    else
+      Progress.puts([Progress.tag("  ℹ ", :yellow), "No Obsidian data found in vault/obsidian/"])
     end
   end
 
   defp copy_tree(src, dest, true) do
-    Owl.IO.puts(["  ", Owl.Data.tag("dry-run:", :light_black), " would copy ", src, " -> ", dest])
+    Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " would copy ", src, " -> ", dest])
     :ok
   end
 
@@ -129,6 +183,32 @@ defmodule Vault.Commands.Restore do
       rsync_available?() ->
         File.mkdir_p!(dest)
         args = ["-a"] ++ [src <> "/", dest]
+        rsync = System.find_executable("rsync")
+        case System.cmd(rsync, args, stderr_to_stdout: true) do
+          {_out, 0} -> :ok
+          {out, code} -> Progress.puts([Progress.tag("✗ rsync failed (#{code})\n", :red), out])
+        end
+      true ->
+        File.mkdir_p!(dest)
+        case File.cp_r(src, dest, fn _src, _dest -> true end) do
+          {:ok, _} -> :ok
+          {:error, reason, _file} -> Progress.puts([Progress.tag("✗ copy failed: ", :red), to_string(reason)])
+        end
+    end
+  end
+
+  defp copy_tree_with_excludes(src, dest, true, excludes) do
+    _ = excludes
+    Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " would copy ", src, " -> ", dest, " (with excludes)"])
+    :ok
+  end
+
+  defp copy_tree_with_excludes(src, dest, false, excludes) do
+    cond do
+      not File.exists?(src) -> :ok
+      rsync_available?() ->
+        File.mkdir_p!(dest)
+        args = ["-a", "--delete"] ++ Enum.flat_map(excludes, fn e -> ["--exclude", e] end) ++ [src <> "/", dest]
         case System.cmd("rsync", args, stderr_to_stdout: true) do
           {_out, 0} -> :ok
           {out, code} -> Owl.IO.puts([Owl.Data.tag("✗ rsync failed (#{code})\n", :red), out])
@@ -143,10 +223,7 @@ defmodule Vault.Commands.Restore do
   end
 
   defp rsync_available? do
-    case System.cmd("which", ["rsync"], stderr_to_stdout: true) do
-      {_, 0} -> true
-      _ -> false
-    end
+    not is_nil(System.find_executable("rsync"))
   end
 
   defp get_vault_path(opts) do

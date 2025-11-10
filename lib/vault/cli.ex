@@ -5,6 +5,8 @@ defmodule Vault.CLI do
   Vault is a tool for backing up and restoring macOS configurations and data.
   """
 
+  alias Vault.UI.Progress
+
   def main(args) do
     args
     |> parse_args()
@@ -42,8 +44,8 @@ defmodule Vault.CLI do
   defp process_command({:status, args, opts}), do: Vault.Commands.Status.run(args, opts)
 
   defp process_command({:error, msg}) do
-    Owl.IO.puts([
-      Owl.Data.tag("✗ Error: ", :red),
+    Progress.puts([
+      Progress.tag("✗ Error: ", :red),
       msg
     ])
 
@@ -53,28 +55,28 @@ defmodule Vault.CLI do
   defp process_command(_), do: print_help()
 
   defp print_help do
-    Owl.IO.puts([
-      Owl.Data.tag("\nVault", :cyan),
-      Owl.Data.tag(" - macOS Configuration Backup & Restore\n", :light_black),
+    Progress.puts([
+      Progress.tag("\nVault", :cyan),
+      Progress.tag(" - macOS Configuration Backup & Restore\n", :light_black),
       "\n",
-      Owl.Data.tag("Usage:\n", :yellow),
+      Progress.tag("Usage:\n", :yellow),
       "  vault ",
-      Owl.Data.tag("save", :green),
+      Progress.tag("save", :green),
       " [options]        Backup current system to vault\n",
       "  vault ",
-      Owl.Data.tag("restore", :green),
+      Progress.tag("restore", :green),
       " [options]     Restore from vault\n",
       "  vault ",
-      Owl.Data.tag("install", :green),
+      Progress.tag("install", :green),
       " [options]     Install apps defined in config/apps.yaml\n",
       "  vault ",
-      Owl.Data.tag("status", :green),
+      Progress.tag("status", :green),
       " [options]      Show vault status\n",
       "  vault ",
-      Owl.Data.tag("help", :green),
+      Progress.tag("help", :green),
       "                  Show this help\n",
       "\n",
-      Owl.Data.tag("Options:\n", :yellow),
+      Progress.tag("Options:\n", :yellow),
       "  -v, --vault-path PATH       Vault directory path\n",
       "  --verbose                   Verbose output\n",
       "  --dry-run                   Dry run (no changes)\n",

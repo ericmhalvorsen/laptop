@@ -1,10 +1,9 @@
 defmodule Vault.Backup.AppSupport do
   @moduledoc """
   Backs up Application Support data to vault.
-
-  Only backs up from ~/Library/Application Support.
-  This contains app-specific data like preferences, databases, etc.
   """
+
+  alias Vault.UI.Progress
 
   @doc """
   Backs up Application Support directory to the vault.
@@ -36,7 +35,6 @@ defmodule Vault.Backup.AppSupport do
     app_support_source = Path.join([home_dir, "Library", "Application Support"])
     app_support_dest = Path.join([vault_path, "app-support"])
 
-    # Default exclusions - common system/cache directories
     exclude_patterns = [
       ".DS_Store",
       "CrashReporter",
@@ -53,7 +51,6 @@ defmodule Vault.Backup.AppSupport do
     else
       with {:ok, entries} <- File.ls(app_support_source),
            :ok <- maybe_create_dest(app_support_dest, dry_run) do
-        # Filter to only directories
         app_dirs =
           entries
           |> Enum.filter(fn entry ->
@@ -65,15 +62,7 @@ defmodule Vault.Backup.AppSupport do
         if Enum.empty?(app_dirs) or dry_run do
           {:ok, %{backed_up: [], total_size: 0}}
         else
-          # Start progress bar
-          Owl.ProgressBar.start(
-            id: :app_support,
-            label: "  Application Support",
-            total: length(app_dirs),
-            bar_width_ratio: 0.5,
-            filled_symbol: "█",
-            partial_symbols: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
-          )
+          Progress.start_progress(:app_support, "  Application Support", length(app_dirs))
 
           results =
             app_dirs
@@ -91,11 +80,9 @@ defmodule Vault.Backup.AppSupport do
                     {:skipped, app_dir}
                 end
 
-              Owl.ProgressBar.inc(id: :app_support)
+              Progress.increment(:app_support)
               result
             end)
-
-          Owl.LiveScreen.await_render()
 
           backed_up =
             results
@@ -145,10 +132,7 @@ defmodule Vault.Backup.AppSupport do
   end
 
   defp copy_directory(source, dest) do
-    # Remove destination if it exists
     File.rm_rf(dest)
-
-    # Use File.cp_r for recursive copy
     case File.cp_r(source, dest) do
       {:ok, _files} -> :ok
       {:error, reason, _file} -> {:error, reason}

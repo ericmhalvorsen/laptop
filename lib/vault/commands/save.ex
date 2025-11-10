@@ -8,74 +8,81 @@ defmodule Vault.Commands.Save do
   alias Vault.Backup.Fonts
   alias Vault.Backup.Homebrew
   alias Vault.Backup.HomeDirs
+  alias Vault.UI.Progress
   alias Vault.Utils.FileUtils
 
   def run(_args, opts) do
     vault_path = get_vault_path(opts)
-    home_dir = System.user_home!()
+    home_dir = get_home_dir(opts)
 
-    Owl.IO.puts([
-      Owl.Data.tag("\n📦 Vault Save", :cyan),
+    Progress.puts([
+      Progress.tag("\n📦 Vault Save", :cyan),
       "\n\n",
       "Backing up to: ",
-      Owl.Data.tag(vault_path, :yellow),
+      Progress.tag(vault_path, :yellow),
       "\n"
     ])
 
     backup_dotfiles(home_dir, vault_path)
     backup_local_bin(home_dir, vault_path)
-    backup_homebrew(vault_path)
+    unless opts[:skip_homebrew] do
+      backup_homebrew(vault_path)
+    end
     backup_fonts(home_dir, vault_path)
     backup_app_support(home_dir, vault_path)
+    backup_brave(home_dir, vault_path)
+    backup_obsidian(home_dir, vault_path)
     backup_home_directories(home_dir, vault_path)
 
     Owl.Box.new([
-      Owl.Data.tag("✓ Backup Complete!", :green),
+      Progress.tag("✓ Backup Complete!", :green),
       "\n\n",
       "Saved to vault:\n",
-      Owl.Data.tag("  ✓ Dotfiles (.config included)", :green),
+      Progress.tag("  ✓ Dotfiles (.config included)", :green),
       "\n",
-      Owl.Data.tag("  ✓ Local scripts", :green),
+      Progress.tag("  ✓ Local scripts", :green),
       "\n",
-      Owl.Data.tag("  ✓ Homebrew", :green),
+      Progress.tag("  ✓ Homebrew", :green),
       "\n",
-      Owl.Data.tag("  ✓ Fonts", :green),
+      Progress.tag("  ✓ Fonts", :green),
       "\n",
-      Owl.Data.tag("  ✓ Application Support", :green),
+      Progress.tag("  ✓ Application Support", :green),
       "\n",
-      Owl.Data.tag("  ✓ Home directories", :green),
-      "\n\n",
-      Owl.Data.tag("Coming soon:", :yellow),
-      " Browser, Obsidian\n"
+      Progress.tag("  ✓ Browser (Brave)", :green),
+      "\n",
+      Progress.tag("  ✓ Obsidian vaults", :green),
+      "\n",
+      Progress.tag("  ✓ Home directories", :green),
+      "\n"
     ])
-    |> Owl.IO.puts()
+    |> Progress.puts()
   end
 
   defp backup_homebrew(vault_path) do
-    Owl.IO.puts(["\n", Owl.Data.tag("→ Backing up Homebrew packages...", :cyan)])
+    Progress.puts(["\n", Progress.tag("→ Backing up Homebrew packages...", :cyan)])
 
     case Homebrew.backup(vault_path) do
       {:ok, result} ->
-        Owl.IO.puts([
+        Progress.puts([
           "  ",
-          Owl.Data.tag("✓", :green),
+          Progress.tag("✓", :green),
           " Brewfile created"
         ])
 
-        Owl.IO.puts([
+        Progress.puts([
           "    ",
-          Owl.Data.tag("#{result.formulas}", :cyan),
+          Progress.tag("#{result.formulas}", :cyan),
           " formulas, ",
-          Owl.Data.tag("#{result.casks}", :cyan),
+          Progress.tag("#{result.casks}", :cyan),
           " casks, ",
-          Owl.Data.tag("#{result.taps}", :cyan),
+          Progress.tag("#{result.taps}", :cyan),
           " taps"
         ])
 
       {:error, reason} ->
-        Owl.IO.puts([
+        Progress.puts([
           "  ",
-          Owl.Data.tag("✗", :red),
+          Progress.tag("✗", :red),
           " Failed: #{reason}"
         ])
     end
@@ -84,31 +91,31 @@ defmodule Vault.Commands.Save do
   defp backup_dotfiles(home_dir, vault_path) do
     dest = Path.join(vault_path, "dotfiles")
 
-    Owl.IO.puts(["\n", Owl.Data.tag("→ Backing up dotfiles...", :cyan)])
+    Progress.puts(["\n", Progress.tag("→ Backing up dotfiles...", :cyan)])
 
     case Dotfiles.backup(home_dir, dest) do
       {:ok, result} ->
-        Owl.IO.puts([
+        Progress.puts([
           "  ",
-          Owl.Data.tag("✓", :green),
+          Progress.tag("✓", :green),
           " Copied ",
-          Owl.Data.tag("#{result.files_copied}", :cyan),
+          Progress.tag("#{result.files_copied}", :cyan),
           " dotfiles (",
-          Owl.Data.tag(FileUtils.format_size(result.total_size), :yellow),
+          Progress.tag(FileUtils.format_size(result.total_size), :yellow),
           ")"
         ])
 
         if result.files_copied > 0 do
-          Owl.IO.puts([
+          Progress.puts([
             "    Files: ",
             Enum.join(result.backed_up_files, ", ")
           ])
         end
 
       {:error, reason} ->
-        Owl.IO.puts([
+        Progress.puts([
           "  ",
-          Owl.Data.tag("✗", :red),
+          Progress.tag("✗", :red),
           " Failed: #{reason}"
         ])
     end
@@ -117,61 +124,61 @@ defmodule Vault.Commands.Save do
   defp backup_local_bin(home_dir, vault_path) do
     dest = Path.join(vault_path, "local-bin")
 
-    Owl.IO.puts(["\n", Owl.Data.tag("→ Backing up local scripts...", :cyan)])
+    Progress.puts(["\n", Progress.tag("→ Backing up local scripts...", :cyan)])
 
     case Dotfiles.backup_local_bin(home_dir, dest) do
       {:ok, result} ->
         if result.files_copied > 0 do
-          Owl.IO.puts([
+          Progress.puts([
             "  ",
-            Owl.Data.tag("✓", :green),
+            Progress.tag("✓", :green),
             " Copied ",
-            Owl.Data.tag("#{result.files_copied}", :cyan),
+            Progress.tag("#{result.files_copied}", :cyan),
             " scripts (",
-            Owl.Data.tag(FileUtils.format_size(result.total_size), :yellow),
+            Progress.tag(FileUtils.format_size(result.total_size), :yellow),
             ")"
           ])
 
-          Owl.IO.puts([
+          Progress.puts([
             "    Scripts: ",
             Enum.join(result.backed_up_files, ", ")
           ])
         else
-          Owl.IO.puts([
+          Progress.puts([
             "  ",
-            Owl.Data.tag("ℹ", :yellow),
+            Progress.tag("ℹ", :yellow),
             " No scripts found in ~/.local/bin"
           ])
         end
 
       {:error, reason} ->
-        Owl.IO.puts([
+        Progress.puts([
           "  ",
-          Owl.Data.tag("✗", :red),
+          Progress.tag("✗", :red),
           " Failed: #{reason}"
         ])
     end
   end
 
   defp backup_fonts(home_dir, vault_path) do
-    Owl.IO.puts(["\n", Owl.Data.tag("→ Backing up fonts...", :cyan)])
+    Progress.puts(["\n", Progress.tag("→ Backing up fonts...", :cyan)])
 
     case Fonts.backup(home_dir, vault_path) do
       {:ok, result} ->
         if result.fonts_copied > 0 do
-          Owl.IO.puts([
+          Progress.puts([
             "  ",
-            Owl.Data.tag("✓", :green),
+            Progress.tag("✓", :green),
             " Copied ",
-            Owl.Data.tag("#{result.fonts_copied}", :cyan),
+            Progress.tag("#{result.fonts_copied}", :cyan),
             " fonts (",
-            Owl.Data.tag(FileUtils.format_size(result.total_size), :yellow),
+            Progress.tag(FileUtils.format_size(result.total_size), :yellow),
             ")"
           ])
         else
-          Owl.IO.puts([
+          Progress.puts([
             "  ",
-            Owl.Data.tag("ℹ", :yellow),
+            Progress.tag("ℹ", :yellow),
             " No custom fonts found in ~/Library/Fonts"
           ])
         end
@@ -186,29 +193,29 @@ defmodule Vault.Commands.Save do
   end
 
   defp backup_app_support(home_dir, vault_path) do
-    Owl.IO.puts(["\n", Owl.Data.tag("→ Backing up Application Support...", :cyan)])
+    Progress.puts(["\n", Progress.tag("→ Backing up Application Support...", :cyan)])
 
     case AppSupport.backup(home_dir, vault_path) do
       {:ok, result} ->
         if length(result.backed_up) > 0 do
-          Owl.IO.puts([
+          Progress.puts([
             "  ",
-            Owl.Data.tag("✓", :green),
+            Progress.tag("✓", :green),
             " Backed up ",
-            Owl.Data.tag("#{length(result.backed_up)}", :cyan),
+            Progress.tag("#{length(result.backed_up)}", :cyan),
             " apps (",
-            Owl.Data.tag(FileUtils.format_size(result.total_size), :yellow),
+            Progress.tag(FileUtils.format_size(result.total_size), :yellow),
             ")"
           ])
 
-          Owl.IO.puts([
+          Progress.puts([
             "    Apps: ",
             Enum.join(result.backed_up, ", ")
           ])
         else
-          Owl.IO.puts([
+          Progress.puts([
             "  ",
-            Owl.Data.tag("ℹ", :yellow),
+            Progress.tag("ℹ", :yellow),
             " No application data found"
           ])
         end
@@ -223,30 +230,30 @@ defmodule Vault.Commands.Save do
   end
 
   defp backup_home_directories(home_dir, vault_path) do
-    Owl.IO.puts(["\n", Owl.Data.tag("→ Backing up home directories...", :cyan)])
+    Progress.puts(["\n", Progress.tag("→ Backing up home directories...", :cyan)])
 
     # Auto-discover all public (non-dot) directories
     case HomeDirs.backup(home_dir, vault_path) do
       {:ok, result} ->
         if length(result.backed_up) > 0 do
-          Owl.IO.puts([
+          Progress.puts([
             "  ",
-            Owl.Data.tag("✓", :green),
+            Progress.tag("✓", :green),
             " Backed up ",
-            Owl.Data.tag("#{length(result.backed_up)}", :cyan),
+            Progress.tag("#{length(result.backed_up)}", :cyan),
             " directories"
           ])
 
-          Owl.IO.puts([
+          Progress.puts([
             "    Directories: ",
             Enum.join(result.backed_up, ", ")
           ])
         end
 
         if length(result.skipped) > 0 do
-          Owl.IO.puts([
+          Progress.puts([
             "  ",
-            Owl.Data.tag("ℹ", :yellow),
+            Progress.tag("ℹ", :yellow),
             " Skipped ",
             "#{length(result.skipped)} (not found): ",
             Enum.join(result.skipped, ", ")
@@ -268,5 +275,105 @@ defmodule Vault.Commands.Save do
 
   defp get_default_vault_path do
     Path.join(System.user_home!(), "VaultBackup")
+  end
+
+  defp get_home_dir(opts) do
+    cond do
+      is_binary(opts[:home_dir]) -> opts[:home_dir]
+      is_binary(System.get_env("HOME")) -> System.get_env("HOME")
+      true -> System.user_home!()
+    end
+  end
+
+  # --- Phase 6: Browser & Obsidian backup ---
+
+  defp backup_brave(home_dir, vault_path) do
+    Progress.puts(["\n", Progress.tag("→ Backing up Brave browser...", :cyan)])
+
+    src = Path.join([home_dir, "Library", "Application Support", "BraveSoftware", "Brave-Browser"])
+    dest = Path.join([vault_path, "browser", "brave"])
+
+    if File.dir?(src) do
+      File.mkdir_p!(dest)
+
+      excludes = [
+        "Cache/",
+        "Code Cache/",
+        "GPUCache/",
+        "ShaderCache/",
+        "GrShaderCache/",
+        "DawnCache/",
+        "Crashpad/",
+        "SwReporter/",
+        "Safe Browsing/",
+        "Service Worker/CacheStorage/"
+      ]
+
+      case copy_with_excludes(src, dest, excludes) do
+        :ok ->
+          Progress.puts(["  ", Progress.tag("✓", :green), " Brave profile copied (excluding caches)"])
+        {:error, reason} ->
+          Progress.puts(["  ", Progress.tag("✗", :red), " Brave backup failed: ", to_string(reason)])
+      end
+    else
+      Progress.puts(["  ", Progress.tag("ℹ", :yellow), " Brave data not found; skipping"])
+    end
+  end
+
+  defp backup_obsidian(home_dir, vault_path) do
+    Progress.puts(["\n", Progress.tag("→ Backing up Obsidian vaults...", :cyan)])
+
+    base = Path.join([home_dir, "Documents", "Obsidian"])
+    dest_base = Path.join([vault_path, "obsidian"])
+
+    if File.dir?(base) do
+      File.mkdir_p!(dest_base)
+      case File.ls(base) do
+        {:ok, entries} ->
+          vaults = Enum.filter(entries, fn e -> File.dir?(Path.join(base, e)) end)
+
+          if Enum.empty?(vaults) do
+            Progress.puts(["  ", Progress.tag("ℹ", :yellow), " No vaults found in ~/Documents/Obsidian"])
+          else
+            Enum.each(vaults, fn v ->
+              src = Path.join(base, v)
+              dest = Path.join(dest_base, v)
+              # Clean dest then copy
+              File.rm_rf(dest)
+              case File.cp_r(src, dest) do
+                {:ok, _} -> Progress.puts(["  ", Progress.tag("✓", :green), " Copied vault: ", v])
+                {:error, reason, _} -> Progress.puts(["  ", Progress.tag("✗", :red), " Failed vault ", v, ": ", to_string(reason)])
+              end
+            end)
+          end
+        _ ->
+          Progress.puts(["  ", Progress.tag("ℹ", :yellow), " Unable to read ~/Documents/Obsidian"])
+      end
+    else
+      Progress.puts(["  ", Progress.tag("ℹ", :yellow), " ~/Documents/Obsidian not found; skipping"])
+    end
+  end
+
+  defp copy_with_excludes(src, dest, excludes) do
+    cond do
+      not File.exists?(src) -> :ok
+      rsync_available?() ->
+        cmd = System.find_executable("rsync")
+        args = ["-a", "--delete"] ++ Enum.flat_map(excludes, fn e -> ["--exclude", e] end) ++ [src <> "/", dest]
+        case System.cmd(cmd, args, stderr_to_stdout: true) do
+          {_out, 0} -> :ok
+          {out, code} -> {:error, "rsync failed (#{code}): #{out}"}
+        end
+      true ->
+        File.rm_rf(dest)
+        case File.cp_r(src, dest, fn _s, _d -> true end) do
+          {:ok, _} -> :ok
+          {:error, reason, _file} -> {:error, reason}
+        end
+    end
+  end
+
+  defp rsync_available? do
+    not is_nil(System.find_executable("rsync"))
   end
 end

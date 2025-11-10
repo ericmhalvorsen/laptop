@@ -1,10 +1,9 @@
 defmodule Vault.Backup.Fonts do
   @moduledoc """
   Backs up user-installed fonts to vault.
-
-  Only backs up fonts from ~/Library/Fonts (user-installed).
-  System fonts are excluded as they come with macOS.
   """
+
+  alias Vault.UI.Progress
 
   @doc """
   Backs up user-installed fonts to the vault.
@@ -22,11 +21,6 @@ defmodule Vault.Backup.Fonts do
       * `:fonts_copied` - Number of font files backed up
       * `:total_size` - Total size in bytes
     * `{:error, reason}` - Failure with reason
-
-  ## Examples
-
-      iex> Fonts.backup("/Users/eric", "/tmp/vault")
-      {:ok, %{fonts_copied: 12, total_size: 2048576}}
   """
   def backup(home_dir, vault_path, opts \\ []) do
     dry_run = Keyword.get(opts, :dry_run, false)
@@ -42,15 +36,7 @@ defmodule Vault.Backup.Fonts do
         if Enum.empty?(files) or dry_run do
           {:ok, %{fonts_copied: 0, total_size: 0}}
         else
-          # Start progress bar
-          Owl.ProgressBar.start(
-            id: :fonts,
-            label: "  Fonts",
-            total: length(files),
-            bar_width_ratio: 0.5,
-            filled_symbol: "█",
-            partial_symbols: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
-          )
+          Progress.start_progress(:fonts, "  Fonts", length(files))
 
           results =
             files
@@ -74,11 +60,9 @@ defmodule Vault.Backup.Fonts do
                   {:skipped, :not_regular}
                 end
 
-              Owl.ProgressBar.inc(id: :fonts)
+              Progress.increment(:fonts)
               result
             end)
-
-          Owl.LiveScreen.await_render()
 
           fonts_copied = Enum.count(results, &match?({:ok, _}, &1))
 
