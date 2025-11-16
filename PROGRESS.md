@@ -149,22 +149,45 @@ laptop/
 ./vault status --vault-path ~/VaultBackup
 ```
 
-## Key Decisions
+## LAST UPDATE
 
-**Why Two Tiers?**
-- Tier 1 (git): Quick setup on new machine with just git clone
-- Tier 2 (vault): Full restore with all personal data
-- Keeps git repo lightweight and fast
-- Vault can live on external drive/NAS
+Tested install - it fails on Falcon package.
 
-**Why rsync for home dirs?**
-- Efficient incremental backups
-- Preserves permissions and metadata
-- Progress indicators for large files
-- Standard tool, reliable
+▶ Installing local .pkg installers
 
-**Testing Strategy**:
-- TDD approach: write tests first
-- Target >75% coverage per module
-- Use temp directories, never modify real files
-- Comprehensive error case coverage
+  Installing Falcon from /Users/eric/Installers/Falcon.pkg
+sudo: a terminal is required to read the password; either use the -S option to read from standard input or configure an askpass helper
+sudo: a password is required
+** (FunctionClauseError) no function clause matching in Owl.Data.do_chunk_by/5
+
+    The following arguments were given to Owl.Data.do_chunk_by/5:
+
+        # 1
+        %IO.Stream{device: :standard_io, raw: false, line_or_bytes: :line}
+
+        # 2
+        nil
+
+        # 3
+        #Function<10.122660863/2 in Owl.Data.split/2>
+
+        # 4
+        []
+
+        # 5
+        []
+
+    (owl 0.13.0) lib/owl/data.ex:632: Owl.Data.do_chunk_by/5
+    (owl 0.13.0) lib/owl/data.ex:633: Owl.Data.do_chunk_by/5
+    (owl 0.13.0) lib/owl/data.ex:620: Owl.Data.chunk_by/4
+    (owl 0.13.0) lib/owl/data.ex:627: Owl.Data.chunk_by/4
+    (owl 0.13.0) lib/owl/data.ex:295: Owl.Data.to_chardata/1
+    (owl 0.13.0) lib/owl/io.ex:553: Owl.IO.puts/2
+    (elixir 1.19.2) lib/enum.ex:961: Enum."-each/2-lists^foreach/1-0-"/2
+    (vault 0.1.0) lib/vault/commands/install.ex:20: Vault.Commands.Install.run/2
+
+
+We should see if there's a way to fix but if not a nice solution might just be to pop open the directory with installers that couldn't auto install.
+This separates the auto-install from the vault - we want the git repo scenario to work in isolation even if the Installers don't exist. The apps.yaml
+file having knowledge of the custom installers feels wrong.
+

@@ -90,51 +90,85 @@ defmodule Vault.Commands.Install do
   defp install_local_pkgs(%{"local_pkg" => pkgs} = manifest, opts) when is_list(pkgs) do
     dry = opts[:dry_run] == true
     installers_dir = resolve_installers_dir(manifest, opts)
+    private_dir = Path.join(installers_dir, "private")
 
     Progress.puts(["\n", Progress.tag("▶ Installing local .pkg installers", :cyan), "\n"])
 
-    Enum.each(pkgs, fn item ->
-      name = item_name(item)
-      requires_sudo = truthy(item["requires_sudo"])
-      optional = truthy(item["optional"])
+    manual_actions =
+      Enum.reduce(pkgs, [], fn item, acc ->
+        name = item_name(item)
+        requires_sudo = truthy(item["requires_sudo"])
+        optional = truthy(item["optional"])
 
-      pkg_pattern =
-        item["pkg"]
-        |> to_string()
-        |> String.replace("{installers}", installers_dir)
-        |> Path.expand()
+        pkg_pattern =
+          item["pkg"]
+          |> to_string()
+          |> String.replace("{installers}", installers_dir)
+          |> Path.expand()
 
-      candidates = Path.wildcard(pkg_pattern)
+        case Path.wildcard(pkg_pattern) do
+          [path | _] ->
+            case run_pkg(name, path, requires_sudo, dry) do
+              :ok -> acc
+              {:manual, msg} -> [msg | acc]
+            end
 
-      case candidates do
-        [path | _] -> run_pkg(name, path, requires_sudo, dry)
-        [] ->
-          msg = "Missing installer for #{name} at #{pkg_pattern}"
-          if optional do
+          [] ->
+            msg = "Missing installer for #{name} at #{pkg_pattern}"
             Progress.puts([Progress.tag("! ", :yellow), msg])
-          else
-            Progress.puts([Progress.tag("! ", :yellow), msg])
-          end
-      end
-    end)
+            [msg | acc]
+        end
+      end)
+      |> Enum.reverse()
+
+    unless dry do
+      :ok = File.mkdir_p(private_dir)
+    end
+
+    if manual_actions != [] do
+      Progress.puts(["\n", Progress.tag("Manual follow-up required:", :yellow)])
+
+      Enum.each(manual_actions, fn msg ->
+        Progress.puts(["  • ", msg])
+      end)
+    end
+
+    Progress.puts([
+      "\n",
+      Progress.tag("ℹ Private installers directory:", :cyan),
+      "\n  ",
+      private_dir,
+      "\n  ",
+      Progress.tag("Tip:", :light_black),
+      " open ",
+      private_dir,
+      "\n"
+    ])
   end
 
   defp install_local_pkgs(_manifest, _opts), do: :ok
 
   defp run_pkg(name, path, requires_sudo, true) do
     Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " installer -pkg ", path, " -target /"])
-    if requires_sudo, do: :ok, else: :ok
     Progress.puts(["  ", Progress.tag("would install:", :light_black), " ", name])
+    :ok
   end
 
   defp run_pkg(name, path, requires_sudo, false) do
     Progress.puts(["  Installing ", Progress.tag(name, :green), " from ", path])
-    cmd = if requires_sudo, do: "sudo", else: "installer"
-    args = if requires_sudo, do: ["installer", "-pkg", path, "-target", "/"], else: ["-pkg", path, "-target", "/"]
 
-    case System.cmd(cmd, args, into: IO.stream(:stdio, :line)) do
+    case System.cmd("installer", ["-pkg", path, "-target", "/"], into: IO.stream(:stdio, :line)) do
       {_out, 0} -> :ok
-      {out, code} -> Progress.puts([Progress.tag("✗ installer failed (#{code})\n", :red), out])
+      {_out, code} ->
+        msg =
+          if requires_sudo do
+            "#{name} installer exited with code #{code}. Re-run with sudo or install manually from #{path}."
+          else
+            "#{name} installer failed with code #{code}. Check installer at #{path}."
+          end
+
+        Progress.puts([Progress.tag("✗ installer failed (#{code})\n", :red)])
+        {:manual, msg}
     end
   end
 

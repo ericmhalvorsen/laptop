@@ -1,15 +1,23 @@
 defmodule Vault.MixProject do
   use Mix.Project
 
+  @author "Eric M. Halvorsen"
+  @version "0.1.0"
+  @description """
+    Vault is a tool for backing up and restoring macOS configurations and data.
+  """
+
   def project do
     [
       app: :vault,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       escript: escript(),
-      test_coverage: [tool: ExCoveralls]
+      test_coverage: [tool: ExCoveralls],
+      description: @description,
+      authors: [@author]
     ]
   end
 

@@ -29,8 +29,8 @@ direct_download:
     bundle_id: "com.postgresapp.Postgres2"
 
 local_pkg:
-  - { name: Falcon, id: falcon, pkg: "{installers}/Falcon.pkg", requires_sudo: true }
-  - { name: NordLayer, id: nordlayer, pkg: "{installers}/NordLayer.pkg", requires_sudo: true }
+  - { name: Falcon, id: falcon, pkg: "{installers}/private/Falcon.pkg", requires_sudo: true }
+  - { name: NordLayer, id: nordlayer, pkg: "{installers}/private/NordLayer.pkg", requires_sudo: true }
 
 local_dmg:
   - name: Little Snitch

@@ -1,8 +1,6 @@
 defmodule Vault.CLI do
   @moduledoc """
   Main entry point for the Vault CLI application.
-
-  Vault is a tool for backing up and restoring macOS configurations and data.
   """
 
   alias Vault.UI.Progress
@@ -57,25 +55,13 @@ defmodule Vault.CLI do
   defp print_help do
     Progress.puts([
       Progress.tag("\nVault", :cyan),
-      Progress.tag(" - macOS Configuration Backup & Restore\n", :light_black),
-      "\n",
+      Progress.tag(" - macOS Configuration Backup & Restore\n", :light_black), "\n",
       Progress.tag("Usage:\n", :yellow),
-      "  vault ",
-      Progress.tag("save", :green),
-      " [options]        Backup current system to vault\n",
-      "  vault ",
-      Progress.tag("restore", :green),
-      " [options]     Restore from vault\n",
-      "  vault ",
-      Progress.tag("install", :green),
-      " [options]     Install apps defined in config/apps.yaml\n",
-      "  vault ",
-      Progress.tag("status", :green),
-      " [options]      Show vault status\n",
-      "  vault ",
-      Progress.tag("help", :green),
-      "                  Show this help\n",
-      "\n",
+      "  vault ", Progress.tag("save", :green), " [options]        Backup current system to vault\n",
+      "  vault ", Progress.tag("restore", :green), " [options]     Restore from vault\n",
+      "  vault ", Progress.tag("install", :green), " [options]     Install apps defined in config/apps.yaml\n",
+      "  vault ", Progress.tag("status", :green), " [options]      Show vault status\n",
+      "  vault ", Progress.tag("help", :green), "                  Show this help\n\n",
       Progress.tag("Options:\n", :yellow),
       "  -v, --vault-path PATH       Vault directory path\n",
       "  --verbose                   Verbose output\n",

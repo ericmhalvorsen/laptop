@@ -7,15 +7,13 @@ defmodule Vault.UI.Progress do
   @partials ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
   @bar_width_ratio 0.5
 
-  @progresses %{}
-
   def enabled? do
     System.get_env("DISABLE_VAULT_OUTPUT") != "1"
   end
 
   def start_progress(_id, _label, total) when total <= 0, do: :ok
   def start_progress(id, label, total) do
-    @progresses = Map.put(@progresses, id, %{label: label, total: total, current: 0})
+    Vault.State.update_progress(id, fn _ -> %{total: total, current: 0} end)
 
     if enabled?() do
       Owl.ProgressBar.start(
@@ -32,13 +30,13 @@ defmodule Vault.UI.Progress do
   end
 
   def increment(id) do
-    @progresses = Map.update!(@progresses, id, fn progress ->
+    Vault.State.update_progress(id, fn progress ->
       %{progress | current: progress.current + 1}
     end)
 
     if enabled?() do
       Owl.ProgressBar.inc(id: id)
-      if finished?(id) do
+      if Vault.State.progress_finished?(id) do
         Owl.LiveScreen.await_render()
       end
     end
@@ -74,9 +72,5 @@ defmodule Vault.UI.Progress do
     else
       :ok
     end
-  end
-
-  def finished?(id) do
-    @progresses[id] && @progresses[id].current >= @progresses[id].total
   end
 end
