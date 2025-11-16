@@ -60,15 +60,9 @@ defmodule Vault.Backup.Preferences do
                 dest = Path.join(prefs_dest, plist)
 
                 result =
-                  case Vault.Sync.copy_file(source, dest) do
-                    :ok ->
-                      case File.stat(dest) do
-                        {:ok, stat} -> {:ok, stat.size}
-                        {:error, _} -> {:error, :stat_failed}
-                      end
-
-                    {:error, _reason} ->
-                      {:error, :copy_failed}
+                  case Vault.Sync.copy_file(source, dest, return_size: true) do
+                    {:ok, size} -> {:ok, size}
+                    {:error, _reason} -> {:error, :copy_failed}
                   end
 
                 Progress.increment(:preferences)

@@ -9,7 +9,6 @@ defmodule Vault.Backup.Dotfiles do
   Files are backed up to the git repository (not the vault).
   """
 
-  alias Vault.Utils.FileUtils
   alias Vault.UI.Progress
 
   @doc """
@@ -109,8 +108,8 @@ defmodule Vault.Backup.Dotfiles do
 
             result =
               cond do
-                File.dir?(source) -> copy_directory(source, dest)
-                File.regular?(source) -> copy_with_size(source, dest)
+                File.dir?(source) -> Vault.Sync.copy_tree(source, dest, return_total_size: true)
+                File.regular?(source) -> Vault.Sync.copy_file(source, dest, return_size: true)
                 true -> {:error, :not_regular}
               end
 
@@ -197,7 +196,7 @@ defmodule Vault.Backup.Dotfiles do
                     {:skipped, :is_directory}
 
                   File.regular?(source) ->
-                    case copy_with_permissions(source, dest) do
+                    case Vault.Sync.copy_file(source, dest, preserve_permissions: true, return_size: true) do
                       {:ok, size} -> {:ok, {file, size}}
                       error -> error
                     end
@@ -278,38 +277,6 @@ defmodule Vault.Backup.Dotfiles do
   end
 
   # Private functions
-
-  defp copy_with_size(source, dest) do
-    with :ok <- Vault.Sync.copy_file(source, dest),
-         {:ok, size} <- FileUtils.file_size(dest) do
-      {:ok, size}
-    end
-  end
-
-  defp copy_directory(source, dest) do
-    with :ok <- Vault.Sync.copy_tree(source, dest),
-         {:ok, files} <- FileUtils.list_files_recursive(dest) do
-      total_size =
-        files
-        |> Enum.map(fn file ->
-          dst_file = Path.join(dest, file)
-          case FileUtils.file_size(dst_file) do
-            {:ok, size} -> size
-            _ -> 0
-          end
-        end)
-        |> Enum.sum()
-
-      {:ok, total_size}
-    end
-  end
-
-  defp copy_with_permissions(source, dest) do
-    with :ok <- Vault.Sync.copy_file(source, dest),
-         {:ok, size} <- FileUtils.file_size(dest) do
-      {:ok, size}
-    end
-  end
 
   defp return_empty_result do
     {:ok,

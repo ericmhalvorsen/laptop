@@ -71,13 +71,9 @@ defmodule Vault.Backup.AppSupport do
               dest = Path.join(app_support_dest, app_dir)
 
               result =
-                case copy_directory(source, dest) do
-                  :ok ->
-                    size = calculate_directory_size(dest)
-                    {:ok, {app_dir, size}}
-
-                  _ ->
-                    {:skipped, app_dir}
+                case Vault.Sync.copy_tree(source, dest, return_total_size: true) do
+                  {:ok, size} -> {:ok, {app_dir, size}}
+                  _ -> {:skipped, app_dir}
                 end
 
               Progress.increment(:app_support)
@@ -131,29 +127,5 @@ defmodule Vault.Backup.AppSupport do
     end)
   end
 
-  defp copy_directory(source, dest) do
-    File.rm_rf(dest)
-    Vault.Sync.copy_tree(source, dest)
-  end
-
-  defp calculate_directory_size(path) do
-    case File.ls(path) do
-      {:ok, entries} ->
-        Enum.reduce(entries, 0, fn entry, acc ->
-          entry_path = Path.join(path, entry)
-
-          if File.dir?(entry_path) do
-            acc + calculate_directory_size(entry_path)
-          else
-            case File.stat(entry_path) do
-              {:ok, stat} -> acc + stat.size
-              _ -> acc
-            end
-          end
-        end)
-
-      _ ->
-        0
-    end
-  end
+  # no private sizing helpers needed; Vault.Sync returns sizes on request
 end

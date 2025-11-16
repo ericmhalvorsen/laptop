@@ -28,7 +28,6 @@ defmodule Vault.Commands.Save do
 
     backup_dotfiles(home_dir, vault_path)
     backup_local_bin(home_dir, vault_path)
-    backup_mise_toml(home_dir, vault_path)
     unless opts[:skip_homebrew] do
       backup_homebrew(vault_path)
     end
@@ -276,38 +275,6 @@ defmodule Vault.Commands.Save do
         Owl.IO.puts([
           "  ",
           Owl.Data.tag("✗", :red),
-          " Failed: #{reason}"
-        ])
-    end
-  end
-
-  defp backup_mise_toml(home_dir, vault_path) do
-    dest = Path.join(vault_path, "dotfiles")
-
-    Progress.puts(["\n", Progress.tag("→ Backing up mise.toml...", :cyan)])
-
-    case Dotfiles.backup_mise_toml(home_dir, dest) do
-      {:ok, result} ->
-        if result.files_copied > 0 do
-          Progress.puts([
-            "  ",
-            Progress.tag("✓", :green),
-            " Copied mise.toml (",
-            Progress.tag(FileUtils.format_size(result.total_size), :yellow),
-            ")"
-          ])
-        else
-          Progress.puts([
-            "  ",
-            Progress.tag("ℹ", :yellow),
-            " mise.toml not found in home directory"
-          ])
-        end
-
-      {:error, reason} ->
-        Progress.puts([
-          "  ",
-          Progress.tag("✗", :red),
           " Failed: #{reason}"
         ])
     end

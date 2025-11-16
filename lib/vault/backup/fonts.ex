@@ -46,15 +46,9 @@ defmodule Vault.Backup.Fonts do
 
               result =
                 if File.regular?(source) do
-                  case Vault.Sync.copy_file(source, dest) do
-                    :ok ->
-                      case File.stat(dest) do
-                        {:ok, stat} -> {:ok, stat.size}
-                        error -> error
-                      end
-
-                    error ->
-                      error
+                  case Vault.Sync.copy_file(source, dest, return_size: true) do
+                    {:ok, size} -> {:ok, size}
+                    error -> error
                   end
                 else
                   {:skipped, :not_regular}

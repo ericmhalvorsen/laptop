@@ -47,23 +47,15 @@ defmodule Vault.Backup.Sensitive do
               {:skipped, label}
 
             File.dir?(source) ->
-              case copy_directory(source, dest) do
-                :ok ->
-                  size = calculate_directory_size(dest)
-                  {:ok, {label, size}}
-
-                _ ->
-                  {:skipped, label}
+              case Vault.Sync.copy_tree(source, dest, return_total_size: true) do
+                {:ok, size} -> {:ok, {label, size}}
+                _ -> {:skipped, label}
               end
 
             File.regular?(source) ->
-              case Vault.Sync.copy_file(source, dest) do
-                :ok ->
-                  {:ok, stat} = File.stat(dest)
-                  {:ok, {label, stat.size}}
-
-                {:error, _reason} ->
-                  {:skipped, label}
+              case Vault.Sync.copy_file(source, dest, return_size: true) do
+                {:ok, size} -> {:ok, {label, size}}
+                {:error, _reason} -> {:skipped, label}
               end
 
             true ->
@@ -88,29 +80,5 @@ defmodule Vault.Backup.Sensitive do
     {:ok, %{backed_up: backed_up, total_size: total_size}}
   end
 
-  defp copy_directory(source, dest) do
-    File.rm_rf(dest)
-    Vault.Sync.copy_tree(source, dest)
-  end
-
-  defp calculate_directory_size(path) do
-    case File.ls(path) do
-      {:ok, entries} ->
-        Enum.reduce(entries, 0, fn entry, acc ->
-          entry_path = Path.join(path, entry)
-
-          if File.dir?(entry_path) do
-            acc + calculate_directory_size(entry_path)
-          else
-            case File.stat(entry_path) do
-              {:ok, stat} -> acc + stat.size
-              _ -> acc
-            end
-          end
-        end)
-
-      _ ->
-        0
-    end
-  end
+  # no private sizing helpers needed; Vault.Sync returns sizes on request
 end

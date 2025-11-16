@@ -7,6 +7,7 @@ defmodule Vault.Sync do
   """
 
   alias Vault.UI.Progress
+  alias Vault.Utils.FileUtils
 
   @doc """
   Copies a directory tree from source to destination.
@@ -34,6 +35,7 @@ defmodule Vault.Sync do
     delete = Keyword.get(opts, :delete, false)
     progress_id = Keyword.get(opts, :progress_id)
     dry_run = Keyword.get(opts, :dry_run, false)
+    return_total_size = Keyword.get(opts, :return_total_size, false)
 
     cond do
       dry_run ->
@@ -42,22 +44,31 @@ defmodule Vault.Sync do
         else
           Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " would copy ", source, " -> ", dest, " (with excludes)"])
         end
-        :ok
+        if return_total_size, do: {:ok, 0}, else: :ok
 
       not File.exists?(source) ->
-        :ok
+        if return_total_size, do: {:ok, 0}, else: :ok
 
       rsync_available?() and progress_id != nil and exclude != [] ->
         # Streaming mode with progress tracking
-        copy_with_rsync_streaming(source, dest, exclude, delete, progress_id)
+        case copy_with_rsync_streaming(source, dest, exclude, delete, progress_id) do
+          :ok -> maybe_return_total_size(:ok, dest, exclude, return_total_size)
+          other -> other
+        end
 
       rsync_available?() ->
         # Standard rsync mode (no streaming)
-        copy_with_rsync(source, dest, exclude, delete)
+        case copy_with_rsync(source, dest, exclude, delete) do
+          :ok -> maybe_return_total_size(:ok, dest, exclude, return_total_size)
+          other -> other
+        end
 
       true ->
         # Fallback to File operations
-        copy_with_file_operations(source, dest, exclude, progress_id)
+        case copy_with_file_operations(source, dest, exclude, progress_id) do
+          :ok -> maybe_return_total_size(:ok, dest, exclude, return_total_size)
+          other -> other
+        end
     end
   end
 
@@ -79,11 +90,12 @@ defmodule Vault.Sync do
   def copy_file(source, dest, opts \\ []) do
     dry_run = Keyword.get(opts, :dry_run, false)
     preserve_permissions = Keyword.get(opts, :preserve_permissions, true)
+    return_size = Keyword.get(opts, :return_size, false)
 
     cond do
       dry_run ->
         Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " would copy ", source, " -> ", dest])
-        :ok
+        if return_size, do: {:ok, 0}, else: :ok
 
       not File.exists?(source) ->
         {:error, :enoent}
@@ -106,11 +118,15 @@ defmodule Vault.Sync do
               :ok
             end
           end
+          |> case do
+            :ok -> maybe_return_size(:ok, dest, return_size)
+            other -> other
+          end
         else
           args = if preserve_permissions, do: ["-a", source, dest], else: [source, dest]
 
           case System.cmd(rsync, args, stderr_to_stdout: true) do
-            {_out, 0} -> :ok
+            {_out, 0} -> maybe_return_size(:ok, dest, return_size)
             {out, code} ->
               Progress.puts([Progress.tag("✗ rsync failed (#{code}): ", :red), out])
               {:error, :rsync_failed}
@@ -129,6 +145,10 @@ defmodule Vault.Sync do
           else
             :ok
           end
+        end
+        |> case do
+          :ok -> maybe_return_size(:ok, dest, return_size)
+          other -> other
         end
     end
   end
@@ -396,4 +416,35 @@ defmodule Vault.Sync do
   defp ensure_trailing_slash(path) do
     if String.ends_with?(path, "/"), do: path, else: path <> "/"
   end
+
+  defp maybe_return_size(:ok, dest, true) do
+    case File.stat(dest) do
+      {:ok, %{size: size}} -> {:ok, size}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+  defp maybe_return_size(:ok, _dest, false), do: :ok
+  defp maybe_return_size(other, _dest, _flag), do: other
+
+  defp maybe_return_total_size(:ok, dest, exclude, true) do
+    case FileUtils.list_files_recursive(dest, exclude: exclude) do
+      {:ok, files} ->
+        total_size =
+          files
+          |> Enum.map(fn file ->
+            dst_file = Path.join(dest, file)
+            case FileUtils.file_size(dst_file) do
+              {:ok, size} -> size
+              _ -> 0
+            end
+          end)
+          |> Enum.sum()
+
+        {:ok, total_size}
+
+      {:error, reason} -> {:error, reason}
+    end
+  end
+  defp maybe_return_total_size(:ok, _dest, _exclude, false), do: :ok
+  defp maybe_return_total_size(other, _dest, _exclude, _flag), do: other
 end
