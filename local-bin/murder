@@ -2,7 +2,7 @@
 
 set -e
 
-local processes=$(ps -ef | grep "$1" | grep -v grep | awk "{print \$2}")
+processes=$(ps -ef | grep "$1" | grep -v grep | awk "{print \$2}")
 if [ -n "$processes" ]; then
   echo "Killing processes: $processes"
   echo "$processes" | xargs kill -9

@@ -11,27 +11,28 @@ if [ $# -eq 0 ]; then
 fi
 
 ENVIRONMENT=$1
+SERVICE=${2:-rails}
 
 case $ENVIRONMENT in
     prod|production)
         CLUSTER="default-prod"
         PROFILE="production"
-        SERVICE_NAME="default-prod-riskops-rails"
+        SERVICE_NAME="default-prod-riskops-${SERVICE}"
         ;;
     service|cs)
         CLUSTER="default-cs"
         PROFILE="customer-success"
-        SERVICE_NAME="default-cs-riskops-rails"
+        SERVICE_NAME="default-cs-riskops-${SERVICE}"
         ;;
     staging)
-	CLUSTER="default-staging"
-	PROFILE="lower-envs"
-	SERVICE_NAME="default-staging-riskops-mcp"
-	;;
+	    CLUSTER="default-staging"
+	    PROFILE="lower-envs"
+	    SERVICE_NAME="default-staging-riskops-${SERVICE}"
+	    ;;
     qa)
         CLUSTER="default-qa"
         PROFILE="lower-envs"
-        SERVICE_NAME="default-qa-riskops-rails"
+        SERVICE_NAME="default-qa-riskops-${SERVICE}"
         ;;
     *)
         echo "Error: Unknown environment '$ENVIRONMENT'"
@@ -64,7 +65,7 @@ aws ecs execute-command \
     --region us-east-1 \
     --cluster $CLUSTER \
     --task $TASK_ID \
-    --container rails \
+    --container $SERVICE \
     --command "/bin/bash" \
     --interactive \
     --profile $PROFILE

@@ -2,4 +2,46 @@
 
 set -e
 
-exec specstory run claude "$@"
+# Determine if we're in a censinet directory
+PWD=$(pwd)
+IN_CENSINET=0
+if [[ "$PWD" == /Users/eric/code/censinet* ]]; then
+    IN_CENSINET=1
+fi
+
+# Parse flags
+USE_PERSONAL=0
+USE_CENSINET=0
+
+for arg in "$@"; do
+    if [[ "$arg" == "--personal" || "$arg" == "-p" ]]; then
+        USE_PERSONAL=1
+        set -- "${@/$arg/}"
+    elif [[ "$arg" == "--censinet" || "$arg" == "-c" ]]; then
+        USE_CENSINET=1
+        set -- "${@/$arg/}"
+    fi
+done
+
+start() {
+    echo "=================================================="
+    echo "    No API KEY found - starting in normal mode    "
+    echo "=================================================="
+
+    exec specstory run claude -c "claude $@" --no-cloud-sync
+}
+
+start_with_key() {
+    echo "=============================="
+    echo "    WARNING: USING API KEY    "
+    echo "=============================="
+
+    exec specstory run claude -c "claude --settings '{ \"apiKeyHelper\": \"~/.claude/anthropic_key.sh\" }' $*" --no-cloud-sync
+}
+
+# Determine which mode to use
+if [[ $IN_CENSINET -eq 1 ]]; then
+    start_with_key
+else
+    start
+fi
