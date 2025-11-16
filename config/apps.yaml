@@ -38,3 +38,13 @@ local_dmg:
     dmg: "{installers}/LittleSnitch*.dmg"
     app_name: "Little Snitch.app"
     optional: true
+  - name: Raycast
+    id: raycast
+    dmg: "{installers}/Raycast.dmg"
+    app_name: "Raycast.app"
+    optional: true
+  - name: Firefox
+    id: firefox
+    dmg: "{installers}/Firefox.dmg"
+    app_name: "Firefox.app"
+    optional: true

@@ -1,0 +1,9 @@
+[settings]
+idiomatic_version_file_enable_tools = ["ruby"]
+
+[tools]
+aws = "latest"
+node = "24"
+ruby = "3.3.9"
+uv = "latest"
+yarn = "latest"

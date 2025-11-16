@@ -16,12 +16,52 @@ defmodule Vault.Commands.Install do
       "\n"
     ])
 
+    restore_configs(opts)
     install_brew(manifest, opts)
     install_local_pkgs(manifest, opts)
     install_local_dmgs(manifest, opts)
     handle_direct_downloads(manifest, opts)
 
     Progress.puts(["\n", Progress.tag("✓ Install complete", :green), "\n"])
+  end
+
+  defp restore_configs(opts) do
+    dry = opts[:dry_run] == true
+    home_dir = System.user_home!()
+    repo_config = Path.expand("config", File.cwd!())
+
+    if not File.dir?(repo_config) do
+      Progress.puts([Progress.tag("  ℹ ", :yellow), "No config directory found in repo"])
+    else
+
+      Progress.puts(["\n", Progress.tag("▶ Restoring configs from laptop/config", :cyan), "\n"])
+
+      case File.ls(repo_config) do
+        {:ok, items} ->
+          items
+          |> Enum.reject(fn name -> name == "apps.yaml" end)
+          |> Enum.each(fn name ->
+            src = Path.join(repo_config, name)
+            dest = Path.join([home_dir, ".config", name])
+
+            if File.dir?(src) do
+              if dry do
+                Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " would restore .config/", name])
+              else
+                File.rm_rf(dest)
+                case File.cp_r(src, dest) do
+                  {:ok, _} ->
+                    Progress.puts(["  ", Progress.tag("✓", :green), " Restored .config/", name])
+                  {:error, reason, _} ->
+                    Progress.puts(["  ", Progress.tag("✗", :red), " Failed to restore .config/", name, ": ", to_string(reason)])
+                end
+              end
+            end
+          end)
+        _ ->
+          Progress.puts([Progress.tag("  ℹ ", :yellow), "Could not read config directory"])
+      end
+    end
   end
 
   defp load_manifest do

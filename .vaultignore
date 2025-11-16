@@ -7,7 +7,6 @@
 *.pid
 .vscode-server
 .vscode
-.zsh_history
 .bash_history
 .lesshst
 .sqlite_history
@@ -34,7 +33,6 @@
 .yarn
 .pnpm-state
 .matplotlib
-.gnupg
 .cups
 .mono
 .android

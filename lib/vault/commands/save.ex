@@ -8,6 +8,8 @@ defmodule Vault.Commands.Save do
   alias Vault.Backup.Fonts
   alias Vault.Backup.Homebrew
   alias Vault.Backup.HomeDirs
+  alias Vault.Backup.Preferences
+  alias Vault.Backup.Sensitive
   alias Vault.UI.Progress
   alias Vault.Utils.FileUtils
 
@@ -25,11 +27,14 @@ defmodule Vault.Commands.Save do
 
     backup_dotfiles(home_dir, vault_path)
     backup_local_bin(home_dir, vault_path)
+    backup_mise_toml(home_dir, vault_path)
     unless opts[:skip_homebrew] do
       backup_homebrew(vault_path)
     end
     backup_fonts(home_dir, vault_path)
     backup_app_support(home_dir, vault_path)
+    backup_preferences(home_dir, vault_path)
+    backup_sensitive(home_dir, vault_path)
     backup_brave(home_dir, vault_path)
     backup_obsidian(home_dir, vault_path)
     backup_home_directories(home_dir, vault_path)
@@ -38,15 +43,21 @@ defmodule Vault.Commands.Save do
       Progress.tag("✓ Backup Complete!", :green),
       "\n\n",
       "Saved to vault:\n",
-      Progress.tag("  ✓ Dotfiles (.config included)", :green),
+      Progress.tag("  ✓ Dotfiles (.config, .zsh_history included)", :green),
       "\n",
       Progress.tag("  ✓ Local scripts", :green),
+      "\n",
+      Progress.tag("  ✓ mise.toml", :green),
       "\n",
       Progress.tag("  ✓ Homebrew", :green),
       "\n",
       Progress.tag("  ✓ Fonts", :green),
       "\n",
       Progress.tag("  ✓ Application Support", :green),
+      "\n",
+      Progress.tag("  ✓ Preferences", :green),
+      "\n",
+      Progress.tag("  ✓ Sensitive (SSH, GPG, AWS, passwords)", :green),
       "\n",
       Progress.tag("  ✓ Browser (Brave)", :green),
       "\n",
@@ -264,6 +275,104 @@ defmodule Vault.Commands.Save do
         Owl.IO.puts([
           "  ",
           Owl.Data.tag("✗", :red),
+          " Failed: #{reason}"
+        ])
+    end
+  end
+
+  defp backup_mise_toml(home_dir, vault_path) do
+    dest = Path.join(vault_path, "dotfiles")
+
+    Progress.puts(["\n", Progress.tag("→ Backing up mise.toml...", :cyan)])
+
+    case Dotfiles.backup_mise_toml(home_dir, dest) do
+      {:ok, result} ->
+        if result.files_copied > 0 do
+          Progress.puts([
+            "  ",
+            Progress.tag("✓", :green),
+            " Copied mise.toml (",
+            Progress.tag(FileUtils.format_size(result.total_size), :yellow),
+            ")"
+          ])
+        else
+          Progress.puts([
+            "  ",
+            Progress.tag("ℹ", :yellow),
+            " mise.toml not found in home directory"
+          ])
+        end
+
+      {:error, reason} ->
+        Progress.puts([
+          "  ",
+          Progress.tag("✗", :red),
+          " Failed: #{reason}"
+        ])
+    end
+  end
+
+  defp backup_preferences(home_dir, vault_path) do
+    Progress.puts(["\n", Progress.tag("→ Backing up Library/Preferences...", :cyan)])
+
+    case Preferences.backup(home_dir, vault_path) do
+      {:ok, result} ->
+        if result.files_copied > 0 do
+          Progress.puts([
+            "  ",
+            Progress.tag("✓", :green),
+            " Backed up ",
+            Progress.tag("#{result.files_copied}", :cyan),
+            " preference files (",
+            Progress.tag(FileUtils.format_size(result.total_size), :yellow),
+            ")"
+          ])
+        else
+          Progress.puts([
+            "  ",
+            Progress.tag("ℹ", :yellow),
+            " No preference files found"
+          ])
+        end
+
+      {:error, reason} ->
+        Progress.puts([
+          "  ",
+          Progress.tag("✗", :red),
+          " Failed: #{reason}"
+        ])
+    end
+  end
+
+  defp backup_sensitive(home_dir, vault_path) do
+    Progress.puts(["\n", Progress.tag("→ Backing up sensitive files...", :cyan)])
+
+    case Sensitive.backup(home_dir, vault_path) do
+      {:ok, result} ->
+        if length(result.backed_up) > 0 do
+          Progress.puts([
+            "  ",
+            Progress.tag("✓", :green),
+            " Backed up: ",
+            Enum.join(result.backed_up, ", ")
+          ])
+
+          Progress.puts([
+            "    Total size: ",
+            Progress.tag(FileUtils.format_size(result.total_size), :yellow)
+          ])
+        else
+          Progress.puts([
+            "  ",
+            Progress.tag("ℹ", :yellow),
+            " No sensitive files found"
+          ])
+        end
+
+      {:error, reason} ->
+        Progress.puts([
+          "  ",
+          Progress.tag("✗", :red),
           " Failed: #{reason}"
         ])
     end

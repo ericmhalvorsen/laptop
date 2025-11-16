@@ -237,6 +237,44 @@ defmodule Vault.Backup.Dotfiles do
     end
   end
 
+  @doc """
+  Backs up mise.toml from home directory to destination directory.
+
+  ## Parameters
+
+    * `home_dir` - Home directory
+    * `dest_dir` - Destination directory for mise.toml
+
+  ## Returns
+
+    * `{:ok, result}` - Success with backup statistics
+    * `{:error, reason}` - Failure with reason
+  """
+  def backup_mise_toml(home_dir, dest_dir) do
+    mise_source = Path.join(home_dir, "mise.toml")
+
+    if not File.exists?(mise_source) do
+      {:ok, %{files_copied: 0, total_size: 0}}
+    else
+      File.mkdir_p!(dest_dir)
+      mise_dest = Path.join(dest_dir, "mise.toml")
+
+      case File.cp(mise_source, mise_dest) do
+        :ok ->
+          case File.stat(mise_dest) do
+            {:ok, stat} ->
+              {:ok, %{files_copied: 1, total_size: stat.size}}
+
+            {:error, reason} ->
+              {:error, reason}
+          end
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    end
+  end
+
   # Private functions
 
   defp copy_with_size(source, dest) do
