@@ -27,6 +27,7 @@
 .bun
 .bundle
 .gem
+.ollama
 .mix
 .hex
 .vim

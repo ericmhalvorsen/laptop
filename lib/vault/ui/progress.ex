@@ -12,7 +12,7 @@ defmodule Vault.UI.Progress do
   end
 
   defp test_env? do
-    Mix.env() == :test
+    Application.get_env(:vault, :env, :prod) == :test
   end
 
   def start_progress(_id, _label, total) when total <= 0, do: :ok
