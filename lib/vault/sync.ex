@@ -59,6 +59,64 @@ defmodule Vault.Sync do
   end
 
   @doc """
+  Copies a single file from source to destination.
+
+  Uses rsync if available for incremental copying, otherwise falls back to File.cp.
+
+  ## Options
+
+    * `:dry_run` - If true, only simulate the operation
+    * `:preserve_permissions` - If true, preserve file permissions (default: true)
+
+  ## Examples
+
+      Sync.copy_file("/src/file.txt", "/dest/file.txt")
+      Sync.copy_file("/src/file.txt", "/dest/file.txt", dry_run: true)
+  """
+  def copy_file(source, dest, opts \\ []) do
+    dry_run = Keyword.get(opts, :dry_run, false)
+    preserve_permissions = Keyword.get(opts, :preserve_permissions, true)
+
+    cond do
+      dry_run ->
+        Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " would copy ", source, " -> ", dest])
+        :ok
+
+      not File.exists?(source) ->
+        {:error, :enoent}
+
+      rsync_available?() ->
+        # Use rsync for single file (skips if unchanged)
+        # Create parent directory first
+        File.mkdir_p(Path.dirname(dest))
+
+        rsync = System.find_executable("rsync")
+        args = if preserve_permissions, do: ["-a", source, dest], else: [source, dest]
+
+        case System.cmd(rsync, args, stderr_to_stdout: true) do
+          {_out, 0} -> :ok
+          {out, code} ->
+            Progress.puts([Progress.tag("✗ rsync failed (#{code}): ", :red), out])
+            {:error, :rsync_failed}
+        end
+
+      true ->
+        # Fallback to File.cp
+        with :ok <- File.mkdir_p(Path.dirname(dest)),
+             :ok <- File.cp(source, dest) do
+          if preserve_permissions do
+            case File.stat(source) do
+              {:ok, stat} -> File.chmod(dest, stat.mode)
+              _ -> :ok
+            end
+          else
+            :ok
+          end
+        end
+    end
+  end
+
+  @doc """
   Compute the number of files that would be transferred by rsync.
 
   Useful for setting up progress bars before copying.
@@ -207,7 +265,7 @@ defmodule Vault.Sync do
       File.rm_rf(dest)
       File.mkdir_p!(dest)
 
-      case File.cp_r(source, dest, fn _src, _dest -> true end) do
+      case File.cp_r(source, dest, on_conflict: fn _src, _dest -> true end) do
         {:ok, _} -> :ok
         {:error, reason, _file} ->
           Progress.puts([Progress.tag("✗ copy failed: ", :red), to_string(reason)])

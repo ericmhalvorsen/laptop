@@ -52,12 +52,12 @@ defmodule Vault.Backup.Sensitive do
                   size = calculate_directory_size(dest)
                   {:ok, {label, size}}
 
-                {:error, _reason} ->
+                _ ->
                   {:skipped, label}
               end
 
             File.regular?(source) ->
-              case File.cp(source, dest) do
+              case Vault.Sync.copy_file(source, dest) do
                 :ok ->
                   {:ok, stat} = File.stat(dest)
                   {:ok, {label, stat.size}}
@@ -90,11 +90,7 @@ defmodule Vault.Backup.Sensitive do
 
   defp copy_directory(source, dest) do
     File.rm_rf(dest)
-
-    case File.cp_r(source, dest) do
-      {:ok, _files} -> :ok
-      {:error, reason, _file} -> {:error, reason}
-    end
+    Vault.Sync.copy_tree(source, dest)
   end
 
   defp calculate_directory_size(path) do

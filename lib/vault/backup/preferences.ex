@@ -60,7 +60,7 @@ defmodule Vault.Backup.Preferences do
                 dest = Path.join(prefs_dest, plist)
 
                 result =
-                  case File.cp(source, dest) do
+                  case Vault.Sync.copy_file(source, dest) do
                     :ok ->
                       case File.stat(dest) do
                         {:ok, stat} -> {:ok, stat.size}

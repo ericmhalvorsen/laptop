@@ -49,11 +49,11 @@ defmodule Vault.Commands.Install do
                 Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " would restore .config/", name])
               else
                 File.rm_rf(dest)
-                case File.cp_r(src, dest) do
-                  {:ok, _} ->
+                case Vault.Sync.copy_tree(src, dest) do
+                  :ok ->
                     Progress.puts(["  ", Progress.tag("✓", :green), " Restored .config/", name])
-                  {:error, reason, _} ->
-                    Progress.puts(["  ", Progress.tag("✗", :red), " Failed to restore .config/", name, ": ", to_string(reason)])
+                  _ ->
+                    Progress.puts(["  ", Progress.tag("✗", :red), " Failed to restore .config/", name])
                 end
               end
             end

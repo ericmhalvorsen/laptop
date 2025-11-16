@@ -438,9 +438,9 @@ defmodule Vault.Commands.Save do
               dest = Path.join(dest_base, v)
               # Clean dest then copy
               File.rm_rf(dest)
-              case File.cp_r(src, dest) do
-                {:ok, _} -> Progress.puts(["  ", Progress.tag("✓", :green), " Copied vault: ", v])
-                {:error, reason, _} -> Progress.puts(["  ", Progress.tag("✗", :red), " Failed vault ", v, ": ", to_string(reason)])
+              case Vault.Sync.copy_tree(src, dest) do
+                :ok -> Progress.puts(["  ", Progress.tag("✓", :green), " Copied vault: ", v])
+                _ -> Progress.puts(["  ", Progress.tag("✗", :red), " Failed vault ", v])
               end
             end)
           end

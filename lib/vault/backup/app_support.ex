@@ -76,7 +76,7 @@ defmodule Vault.Backup.AppSupport do
                     size = calculate_directory_size(dest)
                     {:ok, {app_dir, size}}
 
-                  {:error, _reason} ->
+                  _ ->
                     {:skipped, app_dir}
                 end
 
@@ -133,10 +133,7 @@ defmodule Vault.Backup.AppSupport do
 
   defp copy_directory(source, dest) do
     File.rm_rf(dest)
-    case File.cp_r(source, dest) do
-      {:ok, _files} -> :ok
-      {:error, reason, _file} -> {:error, reason}
-    end
+    Vault.Sync.copy_tree(source, dest)
   end
 
   defp calculate_directory_size(path) do

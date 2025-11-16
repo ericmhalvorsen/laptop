@@ -259,7 +259,7 @@ defmodule Vault.Backup.Dotfiles do
       File.mkdir_p!(dest_dir)
       mise_dest = Path.join(dest_dir, "mise.toml")
 
-      case File.cp(mise_source, mise_dest) do
+      case Vault.Sync.copy_file(mise_source, mise_dest) do
         :ok ->
           case File.stat(mise_dest) do
             {:ok, stat} ->
@@ -295,7 +295,7 @@ defmodule Vault.Backup.Dotfiles do
           dst_file = Path.join(dest, file)
 
           with :ok <- File.mkdir_p(Path.dirname(dst_file)),
-               :ok <- File.cp(src_file, dst_file),
+               :ok <- Vault.Sync.copy_file(src_file, dst_file),
                {:ok, size} <- FileUtils.file_size(dst_file) do
             {:ok, size}
           end
@@ -312,9 +312,7 @@ defmodule Vault.Backup.Dotfiles do
   end
 
   defp copy_with_permissions(source, dest) do
-    with {:ok, stat} <- File.stat(source),
-         :ok <- File.cp(source, dest),
-         :ok <- File.chmod(dest, stat.mode),
+    with :ok <- Vault.Sync.copy_file(source, dest),
          {:ok, size} <- FileUtils.file_size(dest) do
       {:ok, size}
     end
