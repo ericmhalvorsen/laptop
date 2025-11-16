@@ -138,7 +138,7 @@ defmodule Vault.Commands.Install do
       Enum.reduce(pkgs, [], fn item, acc ->
         name = item_name(item)
         requires_sudo = truthy(item["requires_sudo"])
-        optional = truthy(item["optional"])
+        _optional = truthy(item["optional"])
 
         pkg_pattern =
           item["pkg"]
@@ -188,7 +188,7 @@ defmodule Vault.Commands.Install do
 
   defp install_local_pkgs(_manifest, _opts), do: :ok
 
-  defp run_pkg(name, path, requires_sudo, true) do
+  defp run_pkg(name, path, _requires_sudo, true) do
     Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " installer -pkg ", path, " -target /"])
     Progress.puts(["  ", Progress.tag("would install:", :light_black), " ", name])
     :ok

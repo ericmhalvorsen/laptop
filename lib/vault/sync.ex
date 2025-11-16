@@ -1,0 +1,292 @@
+defmodule Vault.Sync do
+  @moduledoc """
+  Centralized file synchronization utilities with rsync support.
+
+  Automatically uses rsync when available for better performance,
+  with fallback to File operations when rsync is not available.
+  """
+
+  alias Vault.UI.Progress
+
+  @doc """
+  Copies a directory tree from source to destination.
+
+  Uses rsync if available, otherwise falls back to File.cp_r.
+
+  ## Options
+
+    * `:exclude` - List of patterns to exclude (only with rsync)
+    * `:delete` - Delete extraneous files from dest (default: false)
+    * `:progress_id` - Atom to track progress, enables streaming mode
+    * `:dry_run` - If true, only simulate the operation
+
+  ## Examples
+
+      Sync.copy_tree("/src", "/dest")
+      Sync.copy_tree("/src", "/dest", exclude: [".DS_Store", "node_modules"])
+      Sync.copy_tree("/src", "/dest", delete: true, progress_id: :my_progress)
+  """
+  def copy_tree(source, dest, opts \\ []) do
+    exclude = Keyword.get(opts, :exclude, [])
+    delete = Keyword.get(opts, :delete, false)
+    progress_id = Keyword.get(opts, :progress_id)
+    dry_run = Keyword.get(opts, :dry_run, false)
+
+    cond do
+      dry_run ->
+        if exclude == [] do
+          Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " would copy ", source, " -> ", dest])
+        else
+          Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " would copy ", source, " -> ", dest, " (with excludes)"])
+        end
+        :ok
+
+      not File.exists?(source) ->
+        :ok
+
+      rsync_available?() and progress_id != nil and exclude != [] ->
+        # Streaming mode with progress tracking
+        copy_with_rsync_streaming(source, dest, exclude, delete, progress_id)
+
+      rsync_available?() ->
+        # Standard rsync mode (no streaming)
+        copy_with_rsync(source, dest, exclude, delete)
+
+      true ->
+        # Fallback to File operations
+        copy_with_file_operations(source, dest, exclude, progress_id)
+    end
+  end
+
+  @doc """
+  Compute the number of files that would be transferred by rsync.
+
+  Useful for setting up progress bars before copying.
+  """
+  def compute_transfer_count(source, dest, exclude \\ []) do
+    if rsync_available?() do
+      rsync = System.find_executable("rsync")
+      exclude_args = Enum.flat_map(exclude, fn p -> ["--exclude", p] end)
+      # -n dry-run, -a archive, --delete to mirror behavior, --out-format=%n prints paths
+      args = ["-na", "--delete", "--out-format=%n"] ++ exclude_args ++ [ensure_trailing_slash(source), dest]
+
+      case System.cmd(rsync, args, stderr_to_stdout: true) do
+        {output, 0} ->
+          output
+          |> String.split("\n", trim: true)
+          |> Enum.reject(&(&1 == "sending incremental file list"))
+          |> Enum.reject(&String.ends_with?(&1, "/"))
+          |> length()
+
+        {_out, _code} ->
+          1
+      end
+    else
+      # Fallback to manual counting
+      count_files(source, exclude)
+    end
+  end
+
+  @doc """
+  Check if rsync is available on the system.
+  """
+  def available? do
+    rsync_available?()
+  end
+
+  # Private functions
+
+  defp rsync_available? do
+    not is_nil(System.find_executable("rsync"))
+  end
+
+  defp copy_with_rsync(source, dest, exclude, delete) do
+    File.mkdir_p!(dest)
+
+    rsync = System.find_executable("rsync")
+    exclude_args = Enum.flat_map(exclude, fn e -> ["--exclude", e] end)
+    delete_arg = if delete, do: ["--delete"], else: []
+
+    args = ["-a"] ++ delete_arg ++ exclude_args ++ [ensure_trailing_slash(source), dest]
+
+    case System.cmd(rsync, args, stderr_to_stdout: true) do
+      {_out, 0} ->
+        :ok
+      {out, code} ->
+        Progress.puts([Progress.tag("✗ rsync failed (#{code})\n", :red), out])
+        :ok
+    end
+  end
+
+  defp copy_with_rsync_streaming(source, dest, exclude, delete, progress_id) do
+    # First check if there's anything to transfer
+    count = compute_transfer_count(source, dest, exclude)
+
+    if count == 0 do
+      File.mkdir_p!(dest)
+      Progress.puts(["  ", Path.basename(source), " ", Progress.tag("(Done)", :green)])
+      :ok
+    else
+      Progress.start_progress(progress_id, "  #{Path.basename(source)}", count)
+
+      rsync = System.find_executable("rsync")
+      exclude_args = Enum.flat_map(exclude, fn pattern -> ["--exclude", pattern] end)
+      delete_arg = if delete, do: ["--delete"], else: []
+
+      args = ["-a"] ++ delete_arg ++ ["--out-format=%n"] ++ exclude_args ++
+             [ensure_trailing_slash(source), dest]
+
+      port = Port.open({:spawn_executable, rsync}, [
+        :binary,
+        {:args, args},
+        :exit_status,
+        :stderr_to_stdout
+      ])
+
+      case stream_rsync_output(port, progress_id) do
+        :ok -> :ok
+        _ ->
+          Progress.puts([Progress.tag("✗ rsync failed\n", :red)])
+          :ok
+      end
+    end
+  end
+
+  defp stream_rsync_output(port, progress_id, buffer \\ "", inc_count \\ 0) do
+    receive do
+      {^port, {:data, data}} ->
+        # Accumulate and process by lines
+        chunk = buffer <> data
+        {lines, rest} = split_lines(chunk)
+
+        new_count =
+          Enum.reduce(lines, inc_count, fn line, acc ->
+            case line do
+              "" -> acc
+              "sending incremental file list" -> acc
+              _ ->
+                if not String.ends_with?(line, "/") do
+                  Progress.increment(progress_id)
+                  acc + 1
+                else
+                  acc
+                end
+            end
+          end)
+
+        stream_rsync_output(port, progress_id, rest, new_count)
+
+      {^port, {:exit_status, 0}} ->
+        :ok
+
+      {^port, {:exit_status, _status}} ->
+        :error
+    after
+      60_000 ->
+        :error
+    end
+  end
+
+  defp split_lines(data) do
+    case String.split(data, "\n", parts: :infinity) do
+      [] -> {[], ""}
+      parts ->
+        # If data ends with newline, last part is ""
+        # Otherwise, keep last part as buffer remainder
+        {Enum.slice(parts, 0, length(parts) - 1), List.last(parts)}
+    end
+  end
+
+  defp copy_with_file_operations(source, dest, exclude, progress_id) do
+    if exclude != [] and progress_id != nil do
+      # Recursive copy with exclusions and progress
+      File.mkdir_p!(dest)
+      copy_with_exclusions(source, dest, exclude, progress_id)
+    else
+      # Simple copy
+      File.rm_rf(dest)
+      File.mkdir_p!(dest)
+
+      case File.cp_r(source, dest, fn _src, _dest -> true end) do
+        {:ok, _} -> :ok
+        {:error, reason, _file} ->
+          Progress.puts([Progress.tag("✗ copy failed: ", :red), to_string(reason)])
+          :ok
+      end
+    end
+  end
+
+  defp copy_with_exclusions(source, dest, exclude_patterns, progress_id) do
+    # Create destination directory
+    File.mkdir_p!(dest)
+
+    # Get all entries in source directory
+    case File.ls(source) do
+      {:ok, entries} ->
+        # Process each entry
+        Enum.each(entries, fn entry ->
+          source_path = Path.join(source, entry)
+          dest_path = Path.join(dest, entry)
+
+          # Skip if excluded
+          unless should_exclude?(entry, exclude_patterns) do
+            if File.dir?(source_path) do
+              # Recursively copy subdirectory
+              copy_with_exclusions(source_path, dest_path, exclude_patterns, progress_id)
+            else
+              # Increment progress
+              if progress_id do
+                Progress.increment(progress_id)
+              end
+
+              # Copy file, skip if it fails (sockets, special files, etc.)
+              try do
+                File.cp!(source_path, dest_path)
+              rescue
+                File.CopyError -> :ok
+                File.Error -> :ok
+              end
+            end
+          end
+        end)
+
+        :ok
+
+      {:error, reason} ->
+        Progress.puts([Progress.tag("✗ list directory failed: ", :red), to_string(reason)])
+        :ok
+    end
+  end
+
+  defp should_exclude?(name, exclude_patterns) do
+    Enum.any?(exclude_patterns, fn pattern ->
+      name == pattern or String.contains?(name, pattern)
+    end)
+  end
+
+  defp count_files(dir, exclude_patterns) do
+    case File.ls(dir) do
+      {:ok, entries} ->
+        Enum.reduce(entries, 0, fn entry, acc ->
+          path = Path.join(dir, entry)
+
+          if should_exclude?(entry, exclude_patterns) do
+            acc
+          else
+            if File.dir?(path) do
+              acc + count_files(path, exclude_patterns)
+            else
+              acc + 1
+            end
+          end
+        end)
+
+      {:error, _} ->
+        0
+    end
+  end
+
+  defp ensure_trailing_slash(path) do
+    if String.ends_with?(path, "/"), do: path, else: path <> "/"
+  end
+end

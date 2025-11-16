@@ -7,6 +7,7 @@ defmodule Vault.Backup.HomeDirs do
   """
 
   alias Vault.UI.Progress
+  alias Vault.Sync
 
   # Common files/directories to exclude from backup
   @exclude_patterns [
@@ -127,10 +128,8 @@ defmodule Vault.Backup.HomeDirs do
             {:backed_up, dir}
           else
             progress_id = String.to_atom("home_dir_#{dir}")
-            case copy_directory_with_progress(source_path, dest_path, exclude, progress_id) do
-              :ok -> {:backed_up, dir}
-              {:error, _reason} -> {:skipped, dir}
-            end
+            copy_directory_with_progress(source_path, dest_path, exclude, progress_id)
+            {:backed_up, dir}
           end
         else
           {:skipped, dir}
@@ -144,9 +143,8 @@ defmodule Vault.Backup.HomeDirs do
   end
 
   defp copy_directory_with_progress(source, dest, exclude_patterns, progress_id) do
-    use_rsync = rsync_available?()
-    if use_rsync do
-      count = compute_transfers_count(source, dest, exclude_patterns)
+    if Sync.available?() do
+      count = Sync.compute_transfer_count(source, dest, exclude_patterns)
 
       if count == 0 do
         File.mkdir_p!(dest)
@@ -154,187 +152,16 @@ defmodule Vault.Backup.HomeDirs do
         :ok
       else
         Progress.start_progress(progress_id, "  #{Path.basename(source)}", count)
-
-        copy_with_rsync(source, dest, exclude_patterns, progress_id)
+        Sync.copy_tree(source, dest, exclude: exclude_patterns, delete: true, progress_id: progress_id)
       end
     else
-      total_files = max(count_files(source, exclude_patterns), 1)
-
+      total_files = max(Sync.compute_transfer_count(source, dest, exclude_patterns), 1)
       Progress.start_progress(progress_id, "  #{Path.basename(source)}", total_files)
-
       File.rm_rf(dest)
-      copy_with_exclusions(source, dest, exclude_patterns, progress_id)
+      Sync.copy_tree(source, dest, exclude: exclude_patterns, progress_id: progress_id)
     end
   end
 
-  defp compute_transfers_count(source, dest, exclude_patterns) do
-    rsync = System.find_executable("rsync")
-    exclude_args = Enum.flat_map(exclude_patterns, fn p -> ["--exclude", p] end)
-    # -n dry-run, -a archive, --delete to mirror behavior, --out-format=%n prints paths
-    args = ["-na", "--delete", "--out-format=%n"] ++ exclude_args ++ [source <> "/", dest]
-
-    case System.cmd(rsync, args, stderr_to_stdout: true) do
-      {output, 0} ->
-        output
-        |> String.split("\n", trim: true)
-        |> Enum.reject(&(&1 == "sending incremental file list"))
-        |> Enum.reject(&String.ends_with?(&1, "/"))
-        |> length()
-      {_out, _code} -> 1
-    end
-  end
-
-  # Check if rsync is available on the system
-  defp rsync_available? do
-    not is_nil(System.find_executable("rsync"))
-  end
-
-  # Copy directory using rsync for better performance
-  defp copy_with_rsync(source, dest, exclude_patterns, progress_id) do
-    # Build exclude arguments for rsync
-    exclude_args =
-      Enum.flat_map(exclude_patterns, fn pattern ->
-        ["--exclude", pattern]
-      end)
-
-    # We stream rsync output and increment on each file path printed.
-    # --out-format=%n prints the file name for each transferred item.
-    rsync = System.find_executable("rsync")
-    args =
-      [
-        "-a",
-        "--delete",
-        "--out-format=%n"
-      ] ++ exclude_args ++ [source <> "/", dest]
-
-    port = Port.open({:spawn_executable, rsync}, [
-      :binary,
-      {:args, args},
-      :exit_status,
-      :stderr_to_stdout
-    ])
-
-    result = stream_rsync_and_increment(port, progress_id)
-    case result do
-      :ok -> :ok
-      _ -> {:error, :rsync_failed}
-    end
-  end
-
-  defp stream_rsync_and_increment(port, progress_id, buffer \\ "", inc_count \\ 0) do
-    receive do
-      {^port, {:data, data}} ->
-        # Accumulate and process by lines
-        chunk = buffer <> data
-        {lines, rest} = split_lines(chunk)
-        new_count =
-          Enum.reduce(lines, inc_count, fn line, acc ->
-            case line do
-              "" -> :ok
-              "sending incremental file list" -> :ok
-              _ ->
-                if not String.ends_with?(line, "/") do
-                  Progress.increment(progress_id)
-                  acc + 1
-                else
-                  acc
-                end
-            end
-          end)
-        stream_rsync_and_increment(port, progress_id, rest, new_count)
-
-      {^port, {:exit_status, 0}} ->
-        :ok
-
-      {^port, {:exit_status, _status}} ->
-        :error
-    after
-      60_000 ->
-        :error
-    end
-  end
-
-  defp split_lines(data) do
-    case String.split(data, "\n", parts: :infinity) do
-      [] -> {[], ""}
-      parts ->
-        # If data ends with newline, last part is ""
-        # Otherwise, keep last part as buffer remainder
-        {Enum.slice(parts, 0, length(parts) - 1), List.last(parts)}
-    end
-  end
-
-  # Count total files in directory (for progress bar)
-  defp count_files(dir, exclude_patterns) do
-    case File.ls(dir) do
-      {:ok, entries} ->
-        Enum.reduce(entries, 0, fn entry, acc ->
-          path = Path.join(dir, entry)
-
-          if should_exclude?(entry, exclude_patterns) do
-            acc
-          else
-            if File.dir?(path) do
-              acc + count_files(path, exclude_patterns)
-            else
-              acc + 1
-            end
-          end
-        end)
-
-      {:error, _} ->
-        0
-    end
-  end
-
-  # Recursively copy directory with exclusions
-  defp copy_with_exclusions(source, dest, exclude_patterns, progress_id) do
-    # Create destination directory
-    File.mkdir_p!(dest)
-
-    # Get all entries in source directory
-    case File.ls(source) do
-      {:ok, entries} ->
-        # Process each entry
-        Enum.each(entries, fn entry ->
-          source_path = Path.join(source, entry)
-          dest_path = Path.join(dest, entry)
-
-          # Skip if excluded
-          unless should_exclude?(entry, exclude_patterns) do
-            if File.dir?(source_path) do
-              # Recursively copy subdirectory
-              copy_with_exclusions(source_path, dest_path, exclude_patterns, progress_id)
-            else
-              # Increment progress
-              if progress_id do
-                Progress.increment(progress_id)
-              end
-
-              # Copy file, skip if it fails (sockets, special files, etc.)
-              try do
-                File.cp!(source_path, dest_path)
-              rescue
-                File.CopyError -> :ok
-                File.Error -> :ok
-              end
-            end
-          end
-        end)
-
-        :ok
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  # Check if file/directory should be excluded
-  defp should_exclude?(name, exclude_patterns) do
-    Enum.any?(exclude_patterns, fn pattern ->
-      name == pattern or String.contains?(name, pattern)
-    end)
-  end
 
   # Collect results of specific type
   defp collect_results(results, type) do

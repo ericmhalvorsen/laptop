@@ -11,11 +11,15 @@ defmodule Vault.UI.Progress do
     System.get_env("DISABLE_VAULT_OUTPUT") != "1"
   end
 
+  defp test_env? do
+    Mix.env() == :test
+  end
+
   def start_progress(_id, _label, total) when total <= 0, do: :ok
   def start_progress(id, label, total) do
     Vault.State.update_progress(id, fn _ -> %{total: total, current: 0} end)
 
-    if enabled?() do
+    if enabled?() && !test_env?() do
       Owl.ProgressBar.start(
         id: id,
         label: label,
@@ -34,7 +38,7 @@ defmodule Vault.UI.Progress do
       %{progress | current: progress.current + 1}
     end)
 
-    if enabled?() do
+    if enabled?() && !test_env?() do
       Owl.ProgressBar.inc(id: id)
       if Vault.State.progress_finished?(id) do
         Owl.LiveScreen.await_render()
@@ -45,18 +49,28 @@ defmodule Vault.UI.Progress do
   end
 
   def puts(iodata) do
-    if enabled?() do
-      Owl.IO.puts(iodata)
-    else
-      :ok
+    cond do
+      !enabled?() ->
+        :ok
+
+      test_env?() ->
+        IO.puts(iodata)
+
+      true ->
+        Owl.IO.puts(iodata)
     end
   end
 
   def tag(text, color) do
-    if enabled?() do
-      Owl.Data.tag(text, color)
-    else
-      text
+    cond do
+      !enabled?() ->
+        text
+
+      test_env?() ->
+        text
+
+      true ->
+        Owl.Data.tag(text, color)
     end
   end
 

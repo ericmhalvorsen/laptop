@@ -3,6 +3,7 @@ defmodule Vault.Commands.Restore do
   Command to restore macOS configuration from the vault.
   """
   import Bitwise
+  alias Vault.Sync
   alias Vault.UI.Progress
 
   def run(_args, opts) do
@@ -283,58 +284,12 @@ defmodule Vault.Commands.Restore do
     end
   end
 
-  defp copy_tree(src, dest, true) do
-    Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " would copy ", src, " -> ", dest])
-    :ok
+  defp copy_tree(src, dest, dry_run) do
+    Sync.copy_tree(src, dest, dry_run: dry_run)
   end
 
-  defp copy_tree(src, dest, false) do
-    cond do
-      not File.exists?(src) -> :ok
-      rsync_available?() ->
-        File.mkdir_p!(dest)
-        args = ["-a"] ++ [src <> "/", dest]
-        rsync = System.find_executable("rsync")
-        case System.cmd(rsync, args, stderr_to_stdout: true) do
-          {_out, 0} -> :ok
-          {out, code} -> Progress.puts([Progress.tag("✗ rsync failed (#{code})\n", :red), out])
-        end
-      true ->
-        File.mkdir_p!(dest)
-        case File.cp_r(src, dest, fn _src, _dest -> true end) do
-          {:ok, _} -> :ok
-          {:error, reason, _file} -> Progress.puts([Progress.tag("✗ copy failed: ", :red), to_string(reason)])
-        end
-    end
-  end
-
-  defp copy_tree_with_excludes(src, dest, true, excludes) do
-    _ = excludes
-    Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " would copy ", src, " -> ", dest, " (with excludes)"])
-    :ok
-  end
-
-  defp copy_tree_with_excludes(src, dest, false, excludes) do
-    cond do
-      not File.exists?(src) -> :ok
-      rsync_available?() ->
-        File.mkdir_p!(dest)
-        args = ["-a", "--delete"] ++ Enum.flat_map(excludes, fn e -> ["--exclude", e] end) ++ [src <> "/", dest]
-        case System.cmd("rsync", args, stderr_to_stdout: true) do
-          {_out, 0} -> :ok
-          {out, code} -> Owl.IO.puts([Owl.Data.tag("✗ rsync failed (#{code})\n", :red), out])
-        end
-      true ->
-        File.mkdir_p!(dest)
-        case File.cp_r(src, dest, fn _src, _dest -> true end) do
-          {:ok, _} -> :ok
-          {:error, reason, _file} -> Owl.IO.puts([Owl.Data.tag("✗ copy failed: ", :red), to_string(reason)])
-        end
-    end
-  end
-
-  defp rsync_available? do
-    not is_nil(System.find_executable("rsync"))
+  defp copy_tree_with_excludes(src, dest, dry_run, excludes) do
+    Sync.copy_tree(src, dest, exclude: excludes, delete: true, dry_run: dry_run)
   end
 
   defp get_vault_path(opts) do

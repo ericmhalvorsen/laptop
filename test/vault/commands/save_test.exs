@@ -43,8 +43,10 @@ defmodule Vault.Commands.SaveTest do
 
     # Ensure brew/rsync do not run from host by emptying PATH
     output =
-      capture_io(fn ->
-        Vault.Commands.Save.run([], vault_path: vault_path, home_dir: home, skip_homebrew: true)
+      with_env(%{"DISABLE_VAULT_OUTPUT" => :unset}, fn ->
+        capture_io(fn ->
+          Vault.Commands.Save.run([], vault_path: vault_path, home_dir: home, skip_homebrew: true)
+        end)
       end)
 
     # Headings
@@ -71,7 +73,7 @@ defmodule Vault.Commands.SaveTest do
     File.mkdir_p!(home)
 
     output =
-      with_env(%{"HOME" => home, "PATH" => ""}, fn ->
+      with_env(%{"HOME" => home, "PATH" => "", "DISABLE_VAULT_OUTPUT" => :unset}, fn ->
         capture_io(fn ->
           Vault.Commands.Save.run([], vault_path: vault_path, home_dir: home, skip_homebrew: true)
         end)

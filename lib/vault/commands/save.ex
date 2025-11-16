@@ -10,6 +10,7 @@ defmodule Vault.Commands.Save do
   alias Vault.Backup.HomeDirs
   alias Vault.Backup.Preferences
   alias Vault.Backup.Sensitive
+  alias Vault.Sync
   alias Vault.UI.Progress
   alias Vault.Utils.FileUtils
 
@@ -347,34 +348,26 @@ defmodule Vault.Commands.Save do
   defp backup_sensitive(home_dir, vault_path) do
     Progress.puts(["\n", Progress.tag("→ Backing up sensitive files...", :cyan)])
 
-    case Sensitive.backup(home_dir, vault_path) do
-      {:ok, result} ->
-        if length(result.backed_up) > 0 do
-          Progress.puts([
-            "  ",
-            Progress.tag("✓", :green),
-            " Backed up: ",
-            Enum.join(result.backed_up, ", ")
-          ])
+    {:ok, result} = Sensitive.backup(home_dir, vault_path)
 
-          Progress.puts([
-            "    Total size: ",
-            Progress.tag(FileUtils.format_size(result.total_size), :yellow)
-          ])
-        else
-          Progress.puts([
-            "  ",
-            Progress.tag("ℹ", :yellow),
-            " No sensitive files found"
-          ])
-        end
+    if length(result.backed_up) > 0 do
+      Progress.puts([
+        "  ",
+        Progress.tag("✓", :green),
+        " Backed up: ",
+        Enum.join(result.backed_up, ", ")
+      ])
 
-      {:error, reason} ->
-        Progress.puts([
-          "  ",
-          Progress.tag("✗", :red),
-          " Failed: #{reason}"
-        ])
+      Progress.puts([
+        "    Total size: ",
+        Progress.tag(FileUtils.format_size(result.total_size), :yellow)
+      ])
+    else
+      Progress.puts([
+        "  ",
+        Progress.tag("ℹ", :yellow),
+        " No sensitive files found"
+      ])
     end
   end
 
@@ -418,12 +411,8 @@ defmodule Vault.Commands.Save do
         "Service Worker/CacheStorage/"
       ]
 
-      case copy_with_excludes(src, dest, excludes) do
-        :ok ->
-          Progress.puts(["  ", Progress.tag("✓", :green), " Brave profile copied (excluding caches)"])
-        {:error, reason} ->
-          Progress.puts(["  ", Progress.tag("✗", :red), " Brave backup failed: ", to_string(reason)])
-      end
+      copy_with_excludes(src, dest, excludes)
+      Progress.puts(["  ", Progress.tag("✓", :green), " Brave profile copied (excluding caches)"])
     else
       Progress.puts(["  ", Progress.tag("ℹ", :yellow), " Brave data not found; skipping"])
     end
@@ -464,25 +453,6 @@ defmodule Vault.Commands.Save do
   end
 
   defp copy_with_excludes(src, dest, excludes) do
-    cond do
-      not File.exists?(src) -> :ok
-      rsync_available?() ->
-        cmd = System.find_executable("rsync")
-        args = ["-a", "--delete"] ++ Enum.flat_map(excludes, fn e -> ["--exclude", e] end) ++ [src <> "/", dest]
-        case System.cmd(cmd, args, stderr_to_stdout: true) do
-          {_out, 0} -> :ok
-          {out, code} -> {:error, "rsync failed (#{code}): #{out}"}
-        end
-      true ->
-        File.rm_rf(dest)
-        case File.cp_r(src, dest, fn _s, _d -> true end) do
-          {:ok, _} -> :ok
-          {:error, reason, _file} -> {:error, reason}
-        end
-    end
-  end
-
-  defp rsync_available? do
-    not is_nil(System.find_executable("rsync"))
+    Sync.copy_tree(src, dest, exclude: excludes, delete: true)
   end
 end

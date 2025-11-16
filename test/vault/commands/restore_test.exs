@@ -5,6 +5,16 @@ defmodule Vault.Commands.RestoreTest do
 
   setup :tmp_dir
 
+  defp with_env(env, fun) do
+    old = Enum.map(env, fn {k, _} -> {k, System.get_env(k)} end)
+    Enum.each(env, fn {k, v} -> if v == :unset, do: System.delete_env(k), else: System.put_env(k, v) end)
+    try do
+      fun.()
+    after
+      Enum.each(old, fn {k, v} -> if is_nil(v), do: System.delete_env(k), else: System.put_env(k, v) end)
+    end
+  end
+
   test "dry-run restores full flow when vault has data", %{tmp_dir: tmp_dir} do
     vault_path = Path.join(tmp_dir, "vault")
     home_dir = Path.join(tmp_dir, "home")
@@ -17,7 +27,7 @@ defmodule Vault.Commands.RestoreTest do
     create_test_file(Path.join([vault_path, "home", "Documents", "file.txt"]), "docs")
 
     # fonts/
-    fonts_dir = Path.join([vault_path, "fonts"]) 
+    fonts_dir = Path.join([vault_path, "fonts"])
     File.mkdir_p!(fonts_dir)
     create_test_file(Path.join(fonts_dir, "MyFont.ttf"), "fontdata")
 
@@ -27,18 +37,20 @@ defmodule Vault.Commands.RestoreTest do
     create_test_file(Path.join(ddir, ".zshrc"), "export PATH")
 
     # local-bin/
-    lbin = Path.join([vault_path, "local-bin"]) 
+    lbin = Path.join([vault_path, "local-bin"])
     File.mkdir_p!(lbin)
     create_test_file(Path.join(lbin, "myscript"), "#!/bin/sh\necho hi")
 
     # app-support/
-    asrc = Path.join([vault_path, "app-support", "SomeApp"]) 
+    asrc = Path.join([vault_path, "app-support", "SomeApp"])
     File.mkdir_p!(asrc)
     create_test_file(Path.join(asrc, "config.json"), "{}")
 
     output =
-      capture_io(fn ->
-        Vault.Commands.Restore.run([], vault_path: vault_path, dry_run: true)
+      with_env(%{"DISABLE_VAULT_OUTPUT" => :unset}, fn ->
+        capture_io(fn ->
+          Vault.Commands.Restore.run([], vault_path: vault_path, dry_run: true)
+        end)
       end)
 
     # Headings
@@ -65,8 +77,10 @@ defmodule Vault.Commands.RestoreTest do
     File.mkdir_p!(vault_path)
 
     output =
-      capture_io(fn ->
-        Vault.Commands.Restore.run([], vault_path: vault_path, dry_run: true)
+      with_env(%{"DISABLE_VAULT_OUTPUT" => :unset}, fn ->
+        capture_io(fn ->
+          Vault.Commands.Restore.run([], vault_path: vault_path, dry_run: true)
+        end)
       end)
 
     assert output =~ "No home data found in vault/home/"
