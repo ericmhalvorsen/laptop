@@ -105,6 +105,7 @@ defmodule Vault.Backup.Dotfiles do
           Enum.map(dotfiles, fn dotfile ->
             source = Path.join(source_dir, dotfile)
             dest = Path.join(dest_dir, dotfile)
+            Progress.set_detail(:dotfiles, dotfile)
 
             result =
               cond do
@@ -184,6 +185,7 @@ defmodule Vault.Backup.Dotfiles do
             |> Enum.map(fn file ->
               source = Path.join(local_bin_src, file)
               dest = Path.join(dest_dir, file)
+              Progress.set_detail(:local_bin, file)
 
               # Only backup regular files (not directories or symlinks)
               result =
@@ -278,33 +280,24 @@ defmodule Vault.Backup.Dotfiles do
   # Private functions
 
   defp copy_with_size(source, dest) do
-    with {:ok, _} <- FileUtils.copy_file(source, dest),
+    with :ok <- Vault.Sync.copy_file(source, dest),
          {:ok, size} <- FileUtils.file_size(dest) do
       {:ok, size}
     end
   end
 
   defp copy_directory(source, dest) do
-    with :ok <- File.mkdir_p(dest),
-         {:ok, files} <- FileUtils.list_files_recursive(source) do
-
-      results =
+    with :ok <- Vault.Sync.copy_tree(source, dest),
+         {:ok, files} <- FileUtils.list_files_recursive(dest) do
+      total_size =
         files
         |> Enum.map(fn file ->
-          src_file = Path.join(source, file)
           dst_file = Path.join(dest, file)
-
-          with :ok <- File.mkdir_p(Path.dirname(dst_file)),
-               :ok <- Vault.Sync.copy_file(src_file, dst_file),
-               {:ok, size} <- FileUtils.file_size(dst_file) do
-            {:ok, size}
+          case FileUtils.file_size(dst_file) do
+            {:ok, size} -> size
+            _ -> 0
           end
         end)
-
-      total_size =
-        results
-        |> Enum.filter(&match?({:ok, _}, &1))
-        |> Enum.map(fn {:ok, size} -> size end)
         |> Enum.sum()
 
       {:ok, total_size}

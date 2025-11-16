@@ -27,7 +27,10 @@ defmodule Vault.Sync do
       Sync.copy_tree("/src", "/dest", delete: true, progress_id: :my_progress)
   """
   def copy_tree(source, dest, opts \\ []) do
-    exclude = Keyword.get(opts, :exclude, [])
+    exclude =
+      Keyword.get(opts, :exclude, [])
+      |> Kernel.++(default_excludes())
+      |> Enum.uniq()
     delete = Keyword.get(opts, :delete, false)
     progress_id = Keyword.get(opts, :progress_id)
     dry_run = Keyword.get(opts, :dry_run, false)
@@ -91,13 +94,27 @@ defmodule Vault.Sync do
         File.mkdir_p(Path.dirname(dest))
 
         rsync = System.find_executable("rsync")
-        args = if preserve_permissions, do: ["-a", source, dest], else: [source, dest]
+        if is_nil(rsync) do
+          with :ok <- File.mkdir_p(Path.dirname(dest)),
+               :ok <- File.cp(source, dest) do
+            if preserve_permissions do
+              case File.stat(source) do
+                {:ok, stat} -> File.chmod(dest, stat.mode)
+                _ -> :ok
+              end
+            else
+              :ok
+            end
+          end
+        else
+          args = if preserve_permissions, do: ["-a", source, dest], else: [source, dest]
 
-        case System.cmd(rsync, args, stderr_to_stdout: true) do
-          {_out, 0} -> :ok
-          {out, code} ->
-            Progress.puts([Progress.tag("✗ rsync failed (#{code}): ", :red), out])
-            {:error, :rsync_failed}
+          case System.cmd(rsync, args, stderr_to_stdout: true) do
+            {_out, 0} -> :ok
+            {out, code} ->
+              Progress.puts([Progress.tag("✗ rsync failed (#{code}): ", :red), out])
+              {:error, :rsync_failed}
+          end
         end
 
       true ->
@@ -158,6 +175,21 @@ defmodule Vault.Sync do
     not is_nil(System.find_executable("rsync"))
   end
 
+  defp default_excludes do
+    [
+      "**/*.sock",
+      "**/*.lock",
+      "**/Cache/**",
+      "**/cache/**",
+      "**/tmp/**",
+      "**/Temp/**",
+      "**/log/**",
+      "**/logs/**",
+      "**/*.tmp",
+      "**/*.log"
+    ]
+  end
+
   defp copy_with_rsync(source, dest, exclude, delete) do
     File.mkdir_p!(dest)
 
@@ -171,7 +203,22 @@ defmodule Vault.Sync do
       {_out, 0} ->
         :ok
       {out, code} ->
-        Progress.puts([Progress.tag("✗ rsync failed (#{code})\n", :red), out])
+        # Extract rsync error lines to highlight problematic files
+        error_lines =
+          out
+          |> String.split("\n", trim: true)
+          |> Enum.filter(fn line -> String.starts_with?(line, "rsync:") end)
+
+        if error_lines == [] do
+          Progress.puts([Progress.tag("✗ rsync failed (#{code})\n", :red), out])
+        else
+          Progress.puts([Progress.tag("✗ rsync failed (#{code}). Problem lines:\n", :red)])
+          Enum.each(error_lines, fn line ->
+            Progress.puts(["  ", line, "\n"]) 
+          end)
+        end
+
+        # Keep non-fatal behavior
         :ok
     end
   end
@@ -224,6 +271,7 @@ defmodule Vault.Sync do
               "sending incremental file list" -> acc
               _ ->
                 if not String.ends_with?(line, "/") do
+                  Progress.set_detail(progress_id, line)
                   Progress.increment(progress_id)
                   acc + 1
                 else
@@ -295,6 +343,7 @@ defmodule Vault.Sync do
               # Increment progress
               if progress_id do
                 Progress.increment(progress_id)
+                Progress.set_detail(progress_id, Path.relative_to(source_path, source))
               end
 
               # Copy file, skip if it fails (sockets, special files, etc.)

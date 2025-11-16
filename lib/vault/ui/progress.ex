@@ -28,6 +28,7 @@ defmodule Vault.UI.Progress do
         filled_symbol: @filled,
         partial_symbols: @partials
       )
+      Owl.LiveScreen.add_block({:detail, id}, state: "")
     else
       :ok
     end
@@ -83,6 +84,14 @@ defmodule Vault.UI.Progress do
         config: %{type: {:device, Owl.LiveScreen}},
         formatter: Logger.Formatter.new()
       })
+    else
+      :ok
+    end
+  end
+
+  def set_detail(id, text) do
+    if enabled?() && !test_env?() do
+      Owl.LiveScreen.update({:detail, id}, text)
     else
       :ok
     end
