@@ -35,7 +35,7 @@ defmodule Vault.MixProject do
   defp escript do
     [
       main_module: Vault.CLI,
-      name: "vault"
+      name: ".vault-escript"
     ]
   end
 

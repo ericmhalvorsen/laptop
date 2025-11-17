@@ -6,15 +6,36 @@ Personal macOS configuration and backup system.
 
 Elixir-based CLI for backing up/restoring system configurations.
 
-### Setup
+### Quick Start: Fresh System Restore
+
+**On a fresh macOS system with just bash and curl:**
+
+```bash
+git clone <your-repo> ~/code/laptop
+cd ~/code/laptop
+./vault restore -v /path/to/backup
+```
+
+That's it! The `vault` wrapper automatically:
+- Installs Homebrew (if needed)
+- Installs git and mise (if needed)
+- Builds the vault escript (if needed)
+- Runs your command
+
+**Single entry point, zero manual steps.**
+
+### Development Setup
 
 ```bash
 # Install Elixir/Erlang via mise
-mise use elixir@latest erlang@latest
+mise install
 
-# Build vault tool
-mise exec -- mix deps.get
-mise exec -- mix escript.build
+# Build vault tool (creates .vault-escript)
+mix deps.get
+mix escript.build
+
+# The vault wrapper handles everything automatically
+./vault --help
 ```
 
 ### Commands

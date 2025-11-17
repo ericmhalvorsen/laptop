@@ -5,6 +5,9 @@ defaults:
 
 brew:
   formulas:
+    - git
+    - mise
+    - rsync
     - neovim
     - ollama
   casks:
@@ -19,6 +22,7 @@ brew:
     - rustdesk
     - audacity
     - yaak
+    - expressvpn
 
 direct_download:
   - name: Postgres.app
