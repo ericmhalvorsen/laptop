@@ -10,7 +10,7 @@ defmodule Vault.Commands.Restore do
     vault_path = get_vault_path(opts)
     dry_run = opts[:dry_run] == true
     home_dir = System.user_home!()
-    obsidian_dest = opts[:obsidian_dest] || Path.join([home_dir, "Documents", "Eric"])
+    obsidian_dest = opts[:obsidian_dest] || Path.join([home_dir, "Documents", "Obsidian"])
 
     Progress.puts([
       Progress.tag("\n📂 Vault Restore", :cyan),
@@ -20,17 +20,14 @@ defmodule Vault.Commands.Restore do
       "\n"
     ])
 
-    Progress.puts(["\n", Progress.tag("▶ Running app install", :cyan), "\n"])
-    Vault.Commands.Install.run([], opts)
-
     Progress.puts(["\n", Progress.tag("▶ Restoring home directories", :cyan), "\n"])
-    restore_home_dirs(vault_path, home_dir, dry_run)
+    # restore_home_dirs(vault_path, home_dir, dry_run)
 
     Progress.puts(["\n", Progress.tag("▶ Restoring fonts", :cyan), "\n"])
     restore_fonts(vault_path, home_dir, dry_run)
 
     Progress.puts(["\n", Progress.tag("▶ Restoring dotfiles and ~/.local/bin", :cyan), "\n"])
-    restore_dotfiles_and_local_bin(vault_path, home_dir, dry_run)
+    # restore_dotfiles_and_local_bin(vault_path, home_dir, dry_run)
 
     Progress.puts(["\n", Progress.tag("▶ Restoring Application Support", :cyan), "\n"])
     restore_app_support(vault_path, home_dir, dry_run)
@@ -46,6 +43,9 @@ defmodule Vault.Commands.Restore do
 
     Progress.puts(["\n", Progress.tag("▶ Restoring Obsidian vaults", :cyan), "\n"])
     restore_obsidian(vault_path, obsidian_dest, dry_run)
+
+    Progress.puts(["\n", Progress.tag("▶ Running app install", :cyan), "\n"])
+    Vault.Commands.Install.run([], opts)
 
     Progress.puts(["\n", Progress.tag("✓ Restore complete", :green), "\n"])
   end
