@@ -43,7 +43,11 @@ defmodule Vault.Backup.AppSupport do
       "Google/Chrome/GrShaderCache",
       "Caches",
       "GPUCache",
-      "ShaderCache"
+      "ShaderCache",
+      # Skip inaccessible directories and suppress rsync errors; no FDA prompt
+      "AddressBook",
+      "CallHistoryDB",
+      "FaceTime"
     ] ++ extra_exclude
 
     if not File.dir?(app_support_source) do
@@ -55,7 +59,16 @@ defmodule Vault.Backup.AppSupport do
           entries
           |> Enum.filter(fn entry ->
             path = Path.join(app_support_source, entry)
-            File.dir?(path) and not should_exclude?(entry, exclude_patterns)
+            if File.dir?(path) and not should_exclude?(entry, exclude_patterns) do
+              case File.ls(path) do
+                {:ok, _} -> true
+                {:error, :eperm} -> false
+                {:error, :eacces} -> false
+                _ -> true
+              end
+            else
+              false
+            end
           end)
           |> Enum.sort()
 
@@ -71,7 +84,7 @@ defmodule Vault.Backup.AppSupport do
               dest = Path.join(app_support_dest, app_dir)
 
               result =
-                case Vault.Sync.copy_tree(source, dest, return_total_size: true) do
+                case Vault.Sync.copy_tree(source, dest, return_total_size: true, suppress_errors: true) do
                   {:ok, size} -> {:ok, {app_dir, size}}
                   _ -> {:skipped, app_dir}
                 end
@@ -126,6 +139,4 @@ defmodule Vault.Backup.AppSupport do
       end
     end)
   end
-
-  # no private sizing helpers needed; Vault.Sync returns sizes on request
 end

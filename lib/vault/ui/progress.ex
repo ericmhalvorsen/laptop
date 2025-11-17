@@ -58,7 +58,13 @@ defmodule Vault.UI.Progress do
         IO.puts(iodata)
 
       true ->
-        Owl.IO.puts(iodata)
+        try do
+          Owl.IO.puts(iodata)
+        rescue
+          ArgumentError ->
+            # Fallback if LiveScreen/formatter crashes on large iodata
+            IO.puts(iodata)
+        end
     end
   end
 
@@ -91,7 +97,16 @@ defmodule Vault.UI.Progress do
 
   def set_detail(id, text) do
     if enabled?() && !test_env?() do
-      Owl.LiveScreen.update({:detail, id}, text)
+      safe_text =
+        case text do
+          bin when is_binary(bin) -> String.slice(bin, 0, 200)
+          other -> to_string(other) |> String.slice(0, 200)
+        end
+      try do
+        Owl.LiveScreen.update({:detail, id}, safe_text)
+      rescue
+        ArgumentError -> :ok
+      end
     else
       :ok
     end

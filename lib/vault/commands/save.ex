@@ -388,7 +388,7 @@ defmodule Vault.Commands.Save do
   defp backup_obsidian(home_dir, vault_path) do
     Progress.puts(["\n", Progress.tag("→ Backing up Obsidian vaults...", :cyan)])
 
-    base = Path.join([home_dir, "Documents", "Obsidian"])
+    base = Path.join([home_dir, "Documents", "Eric"])
     dest_base = Path.join([vault_path, "obsidian"])
 
     if File.dir?(base) do
@@ -398,7 +398,7 @@ defmodule Vault.Commands.Save do
           vaults = Enum.filter(entries, fn e -> File.dir?(Path.join(base, e)) end)
 
           if Enum.empty?(vaults) do
-            Progress.puts(["  ", Progress.tag("ℹ", :yellow), " No vaults found in ~/Documents/Obsidian"])
+            Progress.puts(["  ", Progress.tag("ℹ", :yellow), " No vaults found in ~/Documents/Eric"])
           else
             Enum.each(vaults, fn v ->
               src = Path.join(base, v)
@@ -412,10 +412,10 @@ defmodule Vault.Commands.Save do
             end)
           end
         _ ->
-          Progress.puts(["  ", Progress.tag("ℹ", :yellow), " Unable to read ~/Documents/Obsidian"])
+          Progress.puts(["  ", Progress.tag("ℹ", :yellow), " Unable to read ~/Documents/Eric"])
       end
     else
-      Progress.puts(["  ", Progress.tag("ℹ", :yellow), " ~/Documents/Obsidian not found; skipping"])
+      Progress.puts(["  ", Progress.tag("ℹ", :yellow), " ~/Documents/Eric not found; skipping"])
     end
   end
 

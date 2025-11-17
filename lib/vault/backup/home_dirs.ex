@@ -143,27 +143,41 @@ defmodule Vault.Backup.HomeDirs do
   end
 
   defp copy_directory_with_progress(source, dest, exclude_patterns, progress_id) do
+    threshold = 1
     if Sync.available?() do
       count = Sync.compute_transfer_count(source, dest, exclude_patterns)
 
-      if count == 0 do
-        File.mkdir_p!(dest)
-        Progress.puts(["  ", Path.basename(source), " ", Progress.tag("(Done)", :green)])
-        :ok
-      else
-        Progress.start_progress(progress_id, "  #{Path.basename(source)}", count)
-        Sync.copy_tree(source, dest, exclude: exclude_patterns, delete: true, progress_id: progress_id)
+      cond do
+        count == 0 ->
+          File.mkdir_p!(dest)
+          Progress.puts(["  ", Path.basename(source), " ", Progress.tag("(Done)", :green)])
+          :ok
+
+        count <= threshold ->
+          # Non-streaming copy for small/no-op dirs
+          case Sync.copy_tree(source, dest, exclude: exclude_patterns, delete: true) do
+            :ok -> Progress.puts(["  ", Path.basename(source), " ", Progress.tag("(Done)", :green)])
+            _ -> Progress.puts(["  ", Path.basename(source), " ", Progress.tag("(Copy issues)", :yellow)])
+          end
+
+        true ->
+          # Streaming bar without per-file detail to protect formatter
+          Progress.start_progress(progress_id, "  #{Path.basename(source)}", count)
+          case Sync.copy_tree(source, dest, exclude: exclude_patterns, delete: true, progress_id: progress_id, suppress_details: true) do
+            :ok -> :ok
+            _ -> :ok
+          end
       end
     else
-      total_files = max(Sync.compute_transfer_count(source, dest, exclude_patterns), 1)
-      Progress.start_progress(progress_id, "  #{Path.basename(source)}", total_files)
+      # Fallback copy without streaming
       File.rm_rf(dest)
-      Sync.copy_tree(source, dest, exclude: exclude_patterns, progress_id: progress_id)
+      case Sync.copy_tree(source, dest, exclude: exclude_patterns) do
+        :ok -> Progress.puts(["  ", Path.basename(source), " ", Progress.tag("(Done)", :green)])
+        _ -> Progress.puts(["  ", Path.basename(source), " ", Progress.tag("(Copy issues)", :yellow)])
+      end
     end
   end
 
-
-  # Collect results of specific type
   defp collect_results(results, type) do
     results
     |> Enum.filter(fn {result_type, _dir} -> result_type == type end)
