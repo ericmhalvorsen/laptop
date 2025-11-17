@@ -10,7 +10,7 @@ defmodule Vault.Commands.Restore do
     vault_path = get_vault_path(opts)
     dry_run = opts[:dry_run] == true
     home_dir = System.user_home!()
-    obsidian_dest = opts[:obsidian_dest] || Path.join([home_dir, "Documents", "Obsidian"])
+    obsidian_dest = opts[:obsidian_dest] || Path.join([home_dir, "Documents", "Eric"])
 
     Progress.puts([
       Progress.tag("\n📂 Vault Restore", :cyan),
