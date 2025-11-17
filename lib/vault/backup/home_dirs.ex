@@ -161,9 +161,9 @@ defmodule Vault.Backup.HomeDirs do
           end
 
         true ->
-          # Streaming bar without per-file detail to protect formatter
+          # Streaming bar with per-file detail (sanitized in Sync)
           Progress.start_progress(progress_id, "  #{Path.basename(source)}", count)
-          case Sync.copy_tree(source, dest, exclude: exclude_patterns, delete: true, progress_id: progress_id, suppress_details: true) do
+          case Sync.copy_tree(source, dest, exclude: exclude_patterns, delete: true, progress_id: progress_id) do
             :ok -> :ok
             _ -> :ok
           end

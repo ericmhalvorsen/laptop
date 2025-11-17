@@ -375,7 +375,10 @@ defmodule Vault.Sync do
               line == last -> {acc, last}
               true ->
                 if not suppress_details do
-                  Progress.set_detail(progress_id, line)
+                  case sanitize_detail(line) do
+                    nil -> :ok
+                    safe -> Progress.set_detail(progress_id, safe)
+                  end
                 end
                 Progress.increment(progress_id)
                 {acc + 1, line}
@@ -498,6 +501,18 @@ defmodule Vault.Sync do
   defp ensure_trailing_slash(path) do
     if String.ends_with?(path, "/"), do: path, else: path <> "/"
   end
+
+  defp sanitize_detail(line) when is_binary(line) do
+    trimmed = String.trim(line)
+    cond do
+      trimmed == "" -> nil
+      not String.valid?(trimmed) -> nil
+      String.starts_with?(trimmed, "sending incremental file list") -> nil
+      String.starts_with?(trimmed, "deleting ") -> nil
+      true -> trimmed
+    end
+  end
+  defp sanitize_detail(_), do: nil
 
   defp maybe_return_size(:ok, dest, true) do
     case File.stat(dest) do
