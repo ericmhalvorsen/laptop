@@ -7,6 +7,8 @@ brew:
   formulas:
     - neovim
     - ollama
+    - git
+    - rsync
   casks:
     - ghostty
     - warp
@@ -19,6 +21,7 @@ brew:
     - rustdesk
     - audacity
     - yaak
+    - expressvpn
 
 direct_download:
   - name: Postgres.app

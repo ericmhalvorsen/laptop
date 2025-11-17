@@ -6,7 +6,16 @@ Personal macOS configuration and backup system.
 
 Elixir-based CLI for backing up/restoring system configurations.
 
-### Setup
+### Quick Start: Fresh System Restore
+
+**For restoring a fresh macOS system**, use the portable executable:
+
+📖 **[QUICK_RESTORE.md](QUICK_RESTORE.md)** - Fast guide for fresh system setup
+📚 **[PORTABLE_BUILD.md](PORTABLE_BUILD.md)** - Complete portable build documentation
+
+The portable executable includes the BEAM runtime and requires no dependencies!
+
+### Development Setup
 
 ```bash
 # Install Elixir/Erlang via mise
@@ -15,6 +24,9 @@ mise use elixir@latest erlang@latest
 # Build vault tool
 mise exec -- mix deps.get
 mise exec -- mix escript.build
+
+# Or build portable executable
+./bin/build_portable
 ```
 
 ### Commands

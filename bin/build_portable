@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+#
+# Build portable Vault executable using Burrito
+#
+# This script creates a self-contained executable that bundles the BEAM runtime,
+# allowing it to run on systems without Erlang/Elixir installed.
+#
+# Usage:
+#   ./bin/build_portable [target]
+#
+# Targets:
+#   macos_intel - macOS Intel (x86_64)
+#   macos_arm   - macOS Apple Silicon (aarch64)
+#   linux       - Linux (x86_64)
+#   all         - Build all targets (default)
+
+set -euo pipefail
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$PROJECT_ROOT"
+
+# Determine target
+TARGET="${1:-all}"
+
+echo -e "${BLUE}==> Building portable Vault executable${NC}"
+echo -e "${BLUE}    Target: ${TARGET}${NC}"
+echo ""
+
+# Clean previous builds
+echo -e "${YELLOW}==> Cleaning previous builds${NC}"
+rm -rf _build/prod
+rm -rf burrito_out
+
+# Fetch dependencies
+echo -e "${YELLOW}==> Fetching dependencies${NC}"
+mix deps.get
+
+# Compile
+echo -e "${YELLOW}==> Compiling${NC}"
+MIX_ENV=prod mix compile
+
+# Build release
+echo -e "${YELLOW}==> Building release${NC}"
+if [ "$TARGET" = "all" ]; then
+    MIX_ENV=prod mix release
+else
+    MIX_ENV=prod BURRITO_TARGET="$TARGET" mix release
+fi
+
+# Check if build succeeded
+if [ -d "burrito_out" ]; then
+    echo ""
+    echo -e "${GREEN}==> Build successful!${NC}"
+    echo ""
+    echo -e "${GREEN}Portable executables created in:${NC}"
+    echo -e "${GREEN}  burrito_out/${NC}"
+    echo ""
+    ls -lh burrito_out/
+    echo ""
+    echo -e "${BLUE}==> Usage:${NC}"
+    echo -e "${BLUE}    Copy the appropriate executable to your fresh system${NC}"
+    echo -e "${BLUE}    Run: ./vault_<target> --help${NC}"
+else
+    echo -e "${RED}==> Build failed!${NC}"
+    exit 1
+fi

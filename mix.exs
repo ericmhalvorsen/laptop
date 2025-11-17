@@ -15,6 +15,7 @@ defmodule Vault.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       escript: escript(),
+      releases: releases(),
       test_coverage: [tool: ExCoveralls],
       description: @description,
       authors: [@author]
@@ -53,7 +54,27 @@ defmodule Vault.MixProject do
       {:owl, "~> 0.13"},
       {:ucwidth, "~> 0.2"},
       {:excoveralls, "~> 0.18", only: :test},
-      {:yaml_elixir, "~> 2.9"}
+      {:yaml_elixir, "~> 2.9"},
+      {:burrito, "~> 1.0"}
+    ]
+  end
+
+  defp releases do
+    [
+      vault: [
+        steps: [:assemble, &Burrito.wrap/1],
+        burrito: [
+          targets: [
+            macos_intel: [os: :darwin, cpu: :x86_64],
+            macos_arm: [os: :darwin, cpu: :aarch64],
+            linux: [os: :linux, cpu: :x86_64]
+          ],
+          extra_steps: [
+            # Ensure executable permissions
+            {:chmod, "+x", "vault"}
+          ]
+        ]
+      ]
     ]
   end
 end
