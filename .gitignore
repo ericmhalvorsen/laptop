@@ -7,8 +7,8 @@
 erl_crash.dump
 *.ez
 vault-*.tar
-/vault
-!/vault/
+
+.claude
 
 # Backup metadata (generated during backup)
 backup-info.txt
