@@ -5,10 +5,11 @@ defaults:
 
 brew:
   formulas:
+    - git
+    - mise
+    - rsync
     - neovim
     - ollama
-    - git
-    - rsync
   casks:
     - ghostty
     - warp
