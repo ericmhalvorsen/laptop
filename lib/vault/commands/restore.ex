@@ -20,6 +20,9 @@ defmodule Vault.Commands.Restore do
       "\n"
     ])
 
+    Progress.puts(["\n", Progress.tag("▶ Running app install", :cyan), "\n"])
+    Vault.Commands.Install.run([], opts)
+
     Progress.puts(["\n", Progress.tag("▶ Restoring home directories", :cyan), "\n"])
     restore_home_dirs(vault_path, home_dir, dry_run)
 
@@ -43,9 +46,6 @@ defmodule Vault.Commands.Restore do
 
     Progress.puts(["\n", Progress.tag("▶ Restoring Obsidian vaults", :cyan), "\n"])
     restore_obsidian(vault_path, obsidian_dest, dry_run)
-
-    Progress.puts(["\n", Progress.tag("▶ Running app install", :cyan), "\n"])
-    Vault.Commands.Install.run([], opts)
 
     Progress.puts(["\n", Progress.tag("✓ Restore complete", :green), "\n"])
   end

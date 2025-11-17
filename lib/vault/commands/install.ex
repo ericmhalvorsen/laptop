@@ -17,6 +17,7 @@ defmodule Vault.Commands.Install do
     ])
 
     restore_configs(opts)
+    install_nvim_config(opts)
     install_brew(manifest, opts)
     install_local_pkgs(manifest, opts)
     install_local_dmgs(manifest, opts)
@@ -39,7 +40,7 @@ defmodule Vault.Commands.Install do
       case File.ls(repo_config) do
         {:ok, items} ->
           items
-          |> Enum.reject(fn name -> name == "apps.yaml" end)
+          |> Enum.reject(fn name -> name == "apps.yaml" or name == "nvim" end)
           |> Enum.each(fn name ->
             src = Path.join(repo_config, name)
             dest = Path.join([home_dir, ".config", name])
@@ -61,6 +62,57 @@ defmodule Vault.Commands.Install do
         _ ->
           Progress.puts([Progress.tag("  ℹ ", :yellow), "Could not read config directory"])
       end
+    end
+  end
+
+  defp install_nvim_config(opts) do
+    dry = opts[:dry_run] == true
+    home_dir = System.user_home!()
+    nvim_dir = Path.join([home_dir, ".config", "nvim"])
+    repo = "https://github.com/ericmhalvorsen/nvim.git"
+
+    Progress.puts(["\n", Progress.tag("▶ Setting up Neovim config (~/.config/nvim)", :cyan), "\n"])
+
+    cond do
+      dry ->
+        Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " would ensure ", nvim_dir, " is cloned from ", repo])
+
+      File.dir?(nvim_dir) ->
+        # If it's a git repo with origin set to our repo, pull; otherwise replace
+        case System.cmd("git", ["-C", nvim_dir, "remote", "get-url", "origin"], stderr_to_stdout: true) do
+          {out, 0} ->
+            origin = String.trim(out)
+            if origin == repo do
+              case System.cmd("git", ["-C", nvim_dir, "pull", "--ff-only"], stderr_to_stdout: true) do
+                {_out2, 0} -> Progress.puts(["  ", Progress.tag("✓", :green), " Updated Neovim config in place"])
+                {err2, code2} -> Progress.puts([Progress.tag("✗ git pull failed (", :red), Integer.to_string(code2), Progress.tag(")\n", :red), err2])
+              end
+            else
+              File.rm_rf!(nvim_dir)
+              ensure_parent!(nvim_dir)
+              clone_repo(repo, nvim_dir)
+            end
+          {_err, _code} ->
+            # Not a git repo; replace
+            File.rm_rf!(nvim_dir)
+            ensure_parent!(nvim_dir)
+            clone_repo(repo, nvim_dir)
+        end
+
+      true ->
+        ensure_parent!(nvim_dir)
+        clone_repo(repo, nvim_dir)
+    end
+  end
+
+  defp ensure_parent!(dir) do
+    dir |> Path.dirname() |> File.mkdir_p!()
+  end
+
+  defp clone_repo(repo, dest) do
+    case System.cmd("git", ["clone", repo, dest], stderr_to_stdout: true) do
+      {_out, 0} -> Progress.puts(["  ", Progress.tag("✓", :green), " Cloned Neovim config to ", dest])
+      {err, code} -> Progress.puts([Progress.tag("✗ git clone failed (", :red), Integer.to_string(code), Progress.tag(")\n", :red), err])
     end
   end
 
