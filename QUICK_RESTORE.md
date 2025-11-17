@@ -1,95 +1,83 @@
 # Quick Restore Guide
 
-## One-Time Preparation (Do This Now!)
+Restore a fresh macOS system with a single command.
 
-Build the portable executable on a system with Elixir:
+## Prerequisites
 
-```bash
-cd ~/code/laptop
-./bin/build_portable
-```
+- macOS with bash and curl (pre-installed)
+- Internet connection
+- Access to this repo and your backup
 
-Store these files in a safe, accessible location (USB drive, cloud, etc.):
-- `burrito_out/vault_darwin_aarch64` (or your platform)
-- `bin/bootstrap`
-
-## On a Fresh System
-
-### Method 1: Bootstrap Script (Recommended)
+## Fresh System Restore
 
 ```bash
-# 1. Copy files to fresh system
-#    - bootstrap script
-#    - vault portable executable
-
-# 2. Make executable and run
-chmod +x bootstrap vault_darwin_aarch64
-./bootstrap
-
-# 3. Clone repo
-git clone git@github.com:yourusername/laptop.git ~/code/laptop
-cd ~/code/laptop
-
-# 4. Restore
-./vault_darwin_aarch64 restore -v /path/to/backup
-```
-
-### Method 2: Manual Steps
-
-```bash
-# 1. Install Homebrew
+# 1. Install Homebrew (only if not already installed)
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# 2. Install essentials
-brew install git rsync
+# 2. Install git
+brew install git
 
-# 3. Clone repo
-mkdir -p ~/code
+# 3. Clone this repo
 git clone git@github.com:yourusername/laptop.git ~/code/laptop
 cd ~/code/laptop
 
-# 4. Copy portable executable to repo
-cp /path/to/vault_darwin_aarch64 ./vault
-chmod +x ./vault
-
-# 5. Restore
+# 4. Run vault (it auto-installs everything it needs!)
 ./vault restore -v /path/to/backup
 ```
 
-## Just Install Apps (No Full Restore)
+That's it! The `vault` wrapper automatically:
+1. Checks if Homebrew is installed (installs if needed)
+2. Checks if mise is installed (installs if needed)
+3. Builds the vault escript (if not already built)
+4. Runs your restore command
+
+## Just Install Apps
 
 ```bash
 cd ~/code/laptop
 ./vault apps install
 ```
 
-This installs everything defined in `config/apps.yaml`:
+Installs everything from `config/apps.yaml`:
 - Homebrew formulas and casks
-- Local installers from `~/Installers`
-- Applications from DMG files
+- Local .pkg installers
+- Local .dmg images
+- Direct downloads
 
-## Common Issues
+## Dry Run
 
-**"Cannot open vault because developer cannot be verified"**
+Test what would happen without making changes:
+
 ```bash
-xattr -d com.apple.quarantine vault_darwin_aarch64
+./vault restore --dry-run -v /path/to/backup
+./vault apps install --dry-run
 ```
 
-**Permission denied**
-```bash
-chmod +x vault_darwin_aarch64
+## First Time on a System?
+
+The first time you run `./vault` on a new system, you'll see:
+
+```
+╔═══════════════════════════════════════════════════════════╗
+║     Vault Self-Bootstrap                                 ║
+╚═══════════════════════════════════════════════════════════╝
+
+First run detected. Installing dependencies...
+
+==> Installing Homebrew
+==> Installing mise
+==> Building vault
+  Installing Elixir and Erlang...
+  Fetching dependencies...
+  Compiling...
+
+╔═══════════════════════════════════════════════════════════╗
+║     Bootstrap Complete!                                  ║
+╚═══════════════════════════════════════════════════════════╝
 ```
 
-**Wrong architecture**
-- Use `vault_darwin_aarch64` for Apple Silicon (M1/M2/M3)
-- Use `vault_darwin_x86_64` for Intel Macs
+Then your command runs immediately!
 
-## Files Needed on Fresh System
+## Subsequent Runs
 
-Minimum:
-- `vault_darwin_aarch64` (or your platform)
-
-Recommended:
-- `bootstrap` script
-- Access to your backup (external drive, network, etc.)
-- SSH keys (for git clone)
+After the first run, `./vault` executes instantly - no bootstrap needed.

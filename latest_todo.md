@@ -2,24 +2,25 @@
 
 ## Chicken and Egg Problem - SOLVED ✓
 
-The original restore process required:
-1. Install homebrew
-2. brew install git rsync
-3. Clone laptop repo
-4. brew install mise
-5. mise install (Elixir/Erlang)
-6. Build vault escript
-7. Run vault restore
-
 **Problem:** You need Elixir to build vault, but you want vault to set up Elixir!
 
-**Solution:** Burrito portable executable
-- Build once on a system with Elixir
-- Get a self-contained executable that includes BEAM runtime
-- Copy to fresh system and run immediately
-- No dependencies needed!
+**Solution:** Self-bootstrapping wrapper script
 
-See: PORTABLE_BUILD.md and QUICK_RESTORE.md
+The `vault` script is now a bash wrapper that:
+1. Checks if the real vault escript exists
+2. If not, installs Homebrew → mise → builds escript
+3. Delegates to the real escript with your command
+
+**Fresh system restore is now:**
+```bash
+git clone <repo> ~/code/laptop
+cd ~/code/laptop
+./vault restore -v /path/to/backup
+```
+
+Single entry point, zero manual steps!
+
+See: QUICK_RESTORE.md
 
 ## Outstanding Issues to Fix
 

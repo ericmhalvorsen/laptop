@@ -8,25 +8,34 @@ Elixir-based CLI for backing up/restoring system configurations.
 
 ### Quick Start: Fresh System Restore
 
-**For restoring a fresh macOS system**, use the portable executable:
+**On a fresh macOS system with just bash and curl:**
 
-📖 **[QUICK_RESTORE.md](QUICK_RESTORE.md)** - Fast guide for fresh system setup
-📚 **[PORTABLE_BUILD.md](PORTABLE_BUILD.md)** - Complete portable build documentation
+```bash
+git clone <your-repo> ~/code/laptop
+cd ~/code/laptop
+./vault restore -v /path/to/backup
+```
 
-The portable executable includes the BEAM runtime and requires no dependencies!
+That's it! The `vault` wrapper automatically:
+- Installs Homebrew (if needed)
+- Installs git and mise (if needed)
+- Builds the vault escript (if needed)
+- Runs your command
+
+**Single entry point, zero manual steps.**
 
 ### Development Setup
 
 ```bash
 # Install Elixir/Erlang via mise
-mise use elixir@latest erlang@latest
+mise install
 
-# Build vault tool
-mise exec -- mix deps.get
-mise exec -- mix escript.build
+# Build vault tool (creates .vault-escript)
+mix deps.get
+mix escript.build
 
-# Or build portable executable
-./bin/build_portable
+# The vault wrapper handles everything automatically
+./vault --help
 ```
 
 ### Commands
