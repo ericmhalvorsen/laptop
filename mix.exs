@@ -53,7 +53,8 @@ defmodule Vault.MixProject do
       {:owl, "~> 0.13"},
       {:ucwidth, "~> 0.2"},
       {:excoveralls, "~> 0.18", only: :test},
-      {:yaml_elixir, "~> 2.9"}
+      {:yaml_elixir, "~> 2.9"},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end
 end
