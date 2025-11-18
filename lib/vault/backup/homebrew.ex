@@ -33,7 +33,7 @@ defmodule Vault.Backup.Homebrew do
     using_mock = Keyword.has_key?(opts, :cmd)
     brew = brew_cmd() || "brew"
 
-    with :ok <- (if using_mock, do: :ok, else: ensure_homebrew_installed()),
+    with :ok <- if(using_mock, do: :ok, else: ensure_homebrew_installed()),
          {:ok, formulas} <- list_formulas(cmd_fun, brew),
          {:ok, casks} <- list_casks(cmd_fun, brew),
          {:ok, taps} <- list_taps(cmd_fun, brew),
@@ -70,13 +70,13 @@ defmodule Vault.Backup.Homebrew do
 
   defp brew_cmd do
     System.find_executable("brew") ||
-      (if File.exists?("/opt/homebrew/bin/brew"), do: "/opt/homebrew/bin/brew") ||
-      (if File.exists?("/usr/local/bin/brew"), do: "/usr/local/bin/brew") ||
+      if(File.exists?("/opt/homebrew/bin/brew"), do: "/opt/homebrew/bin/brew") ||
+      if(File.exists?("/usr/local/bin/brew"), do: "/usr/local/bin/brew") ||
       nil
   end
 
   defp list_formulas(cmd_fun, brew) do
-    case cmd_fun.(brew, ["list", "--formula"], [stderr_to_stdout: true]) do
+    case cmd_fun.(brew, ["list", "--formula"], stderr_to_stdout: true) do
       {output, 0} ->
         formulas =
           output
@@ -90,7 +90,7 @@ defmodule Vault.Backup.Homebrew do
   end
 
   defp list_casks(cmd_fun, brew) do
-    case cmd_fun.(brew, ["list", "--cask"], [stderr_to_stdout: true]) do
+    case cmd_fun.(brew, ["list", "--cask"], stderr_to_stdout: true) do
       {output, 0} ->
         casks =
           output
@@ -104,7 +104,7 @@ defmodule Vault.Backup.Homebrew do
   end
 
   defp list_taps(cmd_fun, brew) do
-    case cmd_fun.(brew, ["tap"], [stderr_to_stdout: true]) do
+    case cmd_fun.(brew, ["tap"], stderr_to_stdout: true) do
       {output, 0} ->
         taps =
           output
@@ -140,9 +140,7 @@ defmodule Vault.Backup.Homebrew do
       # Remove existing Brewfile if present (brew bundle dump --force would work too)
       File.rm(brewfile_path)
 
-      case cmd_fun.(brew, ["bundle", "dump", "--file=#{brewfile_path}"],
-             stderr_to_stdout: true
-           ) do
+      case cmd_fun.(brew, ["bundle", "dump", "--file=#{brewfile_path}"], stderr_to_stdout: true) do
         {_output, 0} ->
           {:ok, true}
 

@@ -16,6 +16,7 @@ defmodule Vault.UI.Progress do
   end
 
   def start_progress(_id, _label, total) when total <= 0, do: :ok
+
   def start_progress(id, label, total) do
     Vault.State.update_progress(id, fn _ -> %{total: total, current: 0} end)
 
@@ -28,6 +29,7 @@ defmodule Vault.UI.Progress do
         filled_symbol: @filled,
         partial_symbols: @partials
       )
+
       Owl.LiveScreen.add_block({:detail, id}, state: "")
     else
       :ok
@@ -41,6 +43,7 @@ defmodule Vault.UI.Progress do
 
     if enabled?() && !test_env?() do
       Owl.ProgressBar.inc(id: id)
+
       if Vault.State.progress_finished?(id) do
         Owl.LiveScreen.await_render()
       end
@@ -102,6 +105,7 @@ defmodule Vault.UI.Progress do
           bin when is_binary(bin) -> String.slice(bin, 0, 200)
           other -> to_string(other) |> String.slice(0, 200)
         end
+
       try do
         Owl.LiveScreen.update({:detail, id}, safe_text)
       rescue

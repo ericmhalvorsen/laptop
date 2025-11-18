@@ -35,20 +35,21 @@ defmodule Vault.Backup.AppSupport do
     app_support_source = Path.join([home_dir, "Library", "Application Support"])
     app_support_dest = Path.join([vault_path, "app-support"])
 
-    exclude_patterns = [
-      ".DS_Store",
-      "CrashReporter",
-      "com.apple.",
-      "Google/Chrome/Safe Browsing",
-      "Google/Chrome/GrShaderCache",
-      "Caches",
-      "GPUCache",
-      "ShaderCache",
-      # Skip inaccessible directories and suppress rsync errors; no FDA prompt
-      "AddressBook",
-      "CallHistoryDB",
-      "FaceTime"
-    ] ++ extra_exclude
+    exclude_patterns =
+      [
+        ".DS_Store",
+        "CrashReporter",
+        "com.apple.",
+        "Google/Chrome/Safe Browsing",
+        "Google/Chrome/GrShaderCache",
+        "Caches",
+        "GPUCache",
+        "ShaderCache",
+        # Skip inaccessible directories and suppress rsync errors; no FDA prompt
+        "AddressBook",
+        "CallHistoryDB",
+        "FaceTime"
+      ] ++ extra_exclude
 
     if not File.dir?(app_support_source) do
       {:ok, %{backed_up: [], total_size: 0}}
@@ -59,6 +60,7 @@ defmodule Vault.Backup.AppSupport do
           entries
           |> Enum.filter(fn entry ->
             path = Path.join(app_support_source, entry)
+
             if File.dir?(path) and not should_exclude?(entry, exclude_patterns) do
               case File.ls(path) do
                 {:ok, _} -> true
@@ -84,7 +86,10 @@ defmodule Vault.Backup.AppSupport do
               dest = Path.join(app_support_dest, app_dir)
 
               result =
-                case Vault.Sync.copy_tree(source, dest, return_total_size: true, suppress_errors: true) do
+                case Vault.Sync.copy_tree(source, dest,
+                       return_total_size: true,
+                       suppress_errors: true
+                     ) do
                   {:ok, size} -> {:ok, {app_dir, size}}
                   _ -> {:skipped, app_dir}
                 end

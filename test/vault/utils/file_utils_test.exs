@@ -151,7 +151,8 @@ defmodule Vault.Utils.FileUtilsTest do
         "src/main.js" => ""
       })
 
-      assert {:ok, files} = FileUtils.list_files_recursive(tmp_dir, exclude: [".DS_Store", "node_modules"])
+      assert {:ok, files} =
+               FileUtils.list_files_recursive(tmp_dir, exclude: [".DS_Store", "node_modules"])
 
       assert "file1.txt" in files
       assert "src/main.js" in files

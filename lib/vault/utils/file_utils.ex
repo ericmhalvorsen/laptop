@@ -75,7 +75,8 @@ defmodule Vault.Utils.FileUtils do
 
         {:ok, files}
 
-      {:error, reason} -> {:error, reason}
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 

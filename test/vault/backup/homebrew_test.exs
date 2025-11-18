@@ -7,16 +7,20 @@ defmodule Vault.Backup.HomebrewTest do
     cond do
       args == ["list", "--formula"] ->
         {"git\nelixir\n", 0}
+
       args == ["list", "--cask"] ->
         {"warp\n", 0}
+
       args == ["tap"] ->
         {"homebrew/core\n", 0}
+
       String.starts_with?(Enum.join(args, " "), "bundle dump") ->
         file_arg = Enum.find(args, &String.starts_with?(&1, "--file="))
         path = String.replace_prefix(file_arg, "--file=", "")
         File.mkdir_p!(Path.dirname(path))
         File.write!(path, "tap \"homebrew/core\"\nbrew \"git\"\n")
         {"", 0}
+
       true ->
         {"", 0}
     end
@@ -170,7 +174,8 @@ defmodule Vault.Backup.HomebrewTest do
   describe "backup/2 with options" do
     test "accepts dry_run option and doesn't write files", %{dest_dir: dest_dir} do
       # Act
-      assert {:ok, result} = Homebrew.backup(dest_dir, dry_run: true, cmd: &__MODULE__.mock_brew/3)
+      assert {:ok, result} =
+               Homebrew.backup(dest_dir, dry_run: true, cmd: &__MODULE__.mock_brew/3)
 
       # Assert - brew directory should NOT be created in dry run
       brew_dir = Path.join(dest_dir, "brew")

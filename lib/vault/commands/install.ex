@@ -33,7 +33,6 @@ defmodule Vault.Commands.Install do
     if not File.dir?(repo_config) do
       Progress.puts([Progress.tag("  ℹ ", :yellow), "No config directory found in repo"])
     else
-
       Progress.puts(["\n", Progress.tag("▶ Restoring configs from laptop/config", :cyan), "\n"])
 
       case File.ls(repo_config) do
@@ -46,18 +45,31 @@ defmodule Vault.Commands.Install do
 
             if File.dir?(src) do
               if dry do
-                Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " would restore .config/", name])
+                Progress.puts([
+                  "  ",
+                  Progress.tag("dry-run:", :light_black),
+                  " would restore .config/",
+                  name
+                ])
               else
                 File.rm_rf(dest)
+
                 case Vault.Sync.copy_tree(src, dest) do
                   :ok ->
                     Progress.puts(["  ", Progress.tag("✓", :green), " Restored .config/", name])
+
                   _ ->
-                    Progress.puts(["  ", Progress.tag("✗", :red), " Failed to restore .config/", name])
+                    Progress.puts([
+                      "  ",
+                      Progress.tag("✗", :red),
+                      " Failed to restore .config/",
+                      name
+                    ])
                 end
               end
             end
           end)
+
         _ ->
           Progress.puts([Progress.tag("  ℹ ", :yellow), "Could not read config directory"])
       end
@@ -68,9 +80,15 @@ defmodule Vault.Commands.Install do
     path = Path.expand("config/apps.yaml", File.cwd!())
 
     case YamlElixir.read_from_file(path) do
-      {:ok, doc} -> doc
+      {:ok, doc} ->
+        doc
+
       {:error, reason} ->
-        Progress.puts([Progress.tag("✗ Failed to read config/apps.yaml: ", :red), inspect(reason)])
+        Progress.puts([
+          Progress.tag("✗ Failed to read config/apps.yaml: ", :red),
+          inspect(reason)
+        ])
+
         System.halt(1)
     end
   end
@@ -109,6 +127,7 @@ defmodule Vault.Commands.Install do
 
   defp brew_install(args, false) do
     brew = System.find_executable("brew") || "brew"
+
     case System.cmd(brew, args, into: IO.stream(:stdio, :line)) do
       {_out, 0} -> :ok
       {out, code} -> Progress.puts([Progress.tag("✗ brew failed (#{code})\n", :red), out])
@@ -121,6 +140,7 @@ defmodule Vault.Commands.Install do
 
   defp brew_bundle(file, false) do
     brew = System.find_executable("brew") || "brew"
+
     case System.cmd(brew, ["bundle", "--file=" <> file], into: IO.stream(:stdio, :line)) do
       {_out, 0} -> :ok
       {out, code} -> Progress.puts([Progress.tag("✗ brew bundle failed (#{code})\n", :red), out])
@@ -189,7 +209,14 @@ defmodule Vault.Commands.Install do
   defp install_local_pkgs(_manifest, _opts), do: :ok
 
   defp run_pkg(name, path, _requires_sudo, true) do
-    Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " installer -pkg ", path, " -target /"])
+    Progress.puts([
+      "  ",
+      Progress.tag("dry-run:", :light_black),
+      " installer -pkg ",
+      path,
+      " -target /"
+    ])
+
     Progress.puts(["  ", Progress.tag("would install:", :light_black), " ", name])
     :ok
   end
@@ -198,7 +225,9 @@ defmodule Vault.Commands.Install do
     Progress.puts(["  Installing ", Progress.tag(name, :green), " from ", path])
 
     case System.cmd("installer", ["-pkg", path, "-target", "/"], into: IO.stream(:stdio, :line)) do
-      {_out, 0} -> :ok
+      {_out, 0} ->
+        :ok
+
       {_out, code} ->
         msg =
           if requires_sudo do
@@ -217,11 +246,17 @@ defmodule Vault.Commands.Install do
 
     Enum.each(list, fn item ->
       id = item["id"] || item["name"]
+
       case item["id"] do
-        "postgres-app" -> postgres_app_install(item, dry)
+        "postgres-app" ->
+          postgres_app_install(item, dry)
+
         _ ->
-          Progress.puts([Progress.tag("! Skipping direct download installer for ", :yellow), to_string(id),
-            Progress.tag(" (not yet implemented)", :light_black)])
+          Progress.puts([
+            Progress.tag("! Skipping direct download installer for ", :yellow),
+            to_string(id),
+            Progress.tag(" (not yet implemented)", :light_black)
+          ])
       end
     end)
   end
@@ -229,11 +264,20 @@ defmodule Vault.Commands.Install do
   defp handle_direct_downloads(_manifest, _opts), do: :ok
 
   defp postgres_app_install(_item, true) do
-    Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " Install Postgres.app from official site (manual step)"])
+    Progress.puts([
+      "  ",
+      Progress.tag("dry-run:", :light_black),
+      " Install Postgres.app from official site (manual step)"
+    ])
   end
 
   defp postgres_app_install(_item, false) do
-    Progress.puts([Progress.tag("! Postgres.app automated install not implemented yet. Please install from https://postgresapp.com/", :yellow)])
+    Progress.puts([
+      Progress.tag(
+        "! Postgres.app automated install not implemented yet. Please install from https://postgresapp.com/",
+        :yellow
+      )
+    ])
   end
 
   defp item_name(item) do
@@ -286,11 +330,19 @@ defmodule Vault.Commands.Install do
               detach_dmg(mount, dry)
             end
           else
-            {:error, reason} -> Progress.puts([Progress.tag("! Failed to attach DMG: ", :yellow), to_string(reason)])
+            {:error, reason} ->
+              Progress.puts([
+                Progress.tag("! Failed to attach DMG: ", :yellow),
+                to_string(reason)
+              ])
           end
+
         [] ->
           msg = "Missing DMG for #{name} at #{dmg_pattern}"
-          if optional, do: Progress.puts([Progress.tag("! ", :yellow), msg]), else: Progress.puts([Progress.tag("! ", :yellow), msg])
+
+          if optional,
+            do: Progress.puts([Progress.tag("! ", :yellow), msg]),
+            else: Progress.puts([Progress.tag("! ", :yellow), msg])
       end
     end)
   end
@@ -298,7 +350,13 @@ defmodule Vault.Commands.Install do
   defp install_local_dmgs(_manifest, _opts), do: :ok
 
   defp attach_dmg(path, true) do
-    Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " hdiutil attach -nobrowse ", path])
+    Progress.puts([
+      "  ",
+      Progress.tag("dry-run:", :light_black),
+      " hdiutil attach -nobrowse ",
+      path
+    ])
+
     {:ok, "/Volumes/DRYRUN"}
   end
 
@@ -320,38 +378,68 @@ defmodule Vault.Commands.Install do
           |> List.last()
 
         if mount, do: {:ok, mount}, else: {:error, :mountpoint_not_found}
-      {out, code} -> {:error, "hdiutil attach failed (#{code}): #{out}"}
+
+      {out, code} ->
+        {:error, "hdiutil attach failed (#{code}): #{out}"}
     end
   end
 
   defp detach_dmg(_mount, true), do: :ok
+
   defp detach_dmg(mount, false) do
     _ = System.cmd("hdiutil", ["detach", mount], stderr_to_stdout: true)
     :ok
   end
 
   defp handle_dmg_contents(mount, nil, true) do
-    Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " would open ", mount, " for manual installation."])
+    Progress.puts([
+      "  ",
+      Progress.tag("dry-run:", :light_black),
+      " would open ",
+      mount,
+      " for manual installation."
+    ])
   end
 
   defp handle_dmg_contents(mount, nil, false) do
-    Progress.puts([Progress.tag("! No app_name specified for ", :yellow), mount, ". Opening volume for manual install..."])
+    Progress.puts([
+      Progress.tag("! No app_name specified for ", :yellow),
+      mount,
+      ". Opening volume for manual install..."
+    ])
+
     _ = System.cmd("open", [mount])
     :ok
   end
 
   defp handle_dmg_contents(mount, app_name, true) when is_binary(app_name) do
-    Owl.IO.puts(["  ", Owl.Data.tag("dry-run:", :light_black), " cp -R ", Path.join(mount, app_name), " /Applications/"])
+    Owl.IO.puts([
+      "  ",
+      Owl.Data.tag("dry-run:", :light_black),
+      " cp -R ",
+      Path.join(mount, app_name),
+      " /Applications/"
+    ])
   end
 
   defp handle_dmg_contents(mount, app_name, false) when is_binary(app_name) do
     src = Path.join(mount, app_name)
+
     case File.exists?(src) do
       true ->
         {out, code} = System.cmd("cp", ["-R", src, "/Applications/"], stderr_to_stdout: true)
-        if code == 0, do: :ok, else: Progress.puts([Progress.tag("✗ Failed to copy app (#{code})\n", :red), out])
+
+        if code == 0,
+          do: :ok,
+          else: Progress.puts([Progress.tag("✗ Failed to copy app (#{code})\n", :red), out])
+
       false ->
-        Progress.puts([Progress.tag("! App not found in mounted volume: ", :yellow), src, ". Opening volume..."])
+        Progress.puts([
+          Progress.tag("! App not found in mounted volume: ", :yellow),
+          src,
+          ". Opening volume..."
+        ])
+
         _ = System.cmd("open", [mount])
         :ok
     end

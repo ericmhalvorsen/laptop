@@ -81,8 +81,13 @@ defmodule Vault.Backup.HomeDirsTest do
       assert {:ok, _result} = HomeDirs.backup(source_dir, dest_dir, ["Documents"])
 
       # Verify nested structure preserved
-      assert File.exists?(Path.join([dest_dir, "home", "Documents", "Work", "Projects", "project.txt"]))
-      assert File.read!(Path.join([dest_dir, "home", "Documents", "Work", "Projects", "project.txt"])) ==
+      assert File.exists?(
+               Path.join([dest_dir, "home", "Documents", "Work", "Projects", "project.txt"])
+             )
+
+      assert File.read!(
+               Path.join([dest_dir, "home", "Documents", "Work", "Projects", "project.txt"])
+             ) ==
                "project data"
     end
 

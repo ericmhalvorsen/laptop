@@ -75,6 +75,7 @@ defmodule Vault.Backup.HomeDirs do
           entries
           |> Enum.filter(fn entry ->
             path = Path.join(source_dir, entry)
+
             File.dir?(path) and
               not String.starts_with?(entry, ".") and
               entry != "Library" and
@@ -144,6 +145,7 @@ defmodule Vault.Backup.HomeDirs do
 
   defp copy_directory_with_progress(source, dest, exclude_patterns, progress_id) do
     threshold = 1
+
     if Sync.available?() do
       count = Sync.compute_transfer_count(source, dest, exclude_patterns)
 
@@ -156,14 +158,27 @@ defmodule Vault.Backup.HomeDirs do
         count <= threshold ->
           # Non-streaming copy for small/no-op dirs
           case Sync.copy_tree(source, dest, exclude: exclude_patterns, delete: true) do
-            :ok -> Progress.puts(["  ", Path.basename(source), " ", Progress.tag("(Done)", :green)])
-            _ -> Progress.puts(["  ", Path.basename(source), " ", Progress.tag("(Copy issues)", :yellow)])
+            :ok ->
+              Progress.puts(["  ", Path.basename(source), " ", Progress.tag("(Done)", :green)])
+
+            _ ->
+              Progress.puts([
+                "  ",
+                Path.basename(source),
+                " ",
+                Progress.tag("(Copy issues)", :yellow)
+              ])
           end
 
         true ->
           # Streaming bar with per-file detail (sanitized in Sync)
           Progress.start_progress(progress_id, "  #{Path.basename(source)}", count)
-          case Sync.copy_tree(source, dest, exclude: exclude_patterns, delete: true, progress_id: progress_id) do
+
+          case Sync.copy_tree(source, dest,
+                 exclude: exclude_patterns,
+                 delete: true,
+                 progress_id: progress_id
+               ) do
             :ok -> :ok
             _ -> :ok
           end
@@ -171,9 +186,18 @@ defmodule Vault.Backup.HomeDirs do
     else
       # Fallback copy without streaming
       File.rm_rf(dest)
+
       case Sync.copy_tree(source, dest, exclude: exclude_patterns) do
-        :ok -> Progress.puts(["  ", Path.basename(source), " ", Progress.tag("(Done)", :green)])
-        _ -> Progress.puts(["  ", Path.basename(source), " ", Progress.tag("(Copy issues)", :yellow)])
+        :ok ->
+          Progress.puts(["  ", Path.basename(source), " ", Progress.tag("(Done)", :green)])
+
+        _ ->
+          Progress.puts([
+            "  ",
+            Path.basename(source),
+            " ",
+            Progress.tag("(Copy issues)", :yellow)
+          ])
       end
     end
   end

@@ -15,7 +15,7 @@ defmodule Vault.Backup.DotfilesTest do
         ".vimrc" => "set number"
       })
 
-      assert {:ok, result } = Dotfiles.backup(source, dest)
+      assert {:ok, result} = Dotfiles.backup(source, dest)
       assert result.files_copied >= 4
       assert result.total_size > 0
 
@@ -186,7 +186,6 @@ defmodule Vault.Backup.DotfilesTest do
       assert dotfiles == []
     end
   end
-
 
   describe "backup_result" do
     test "result struct has required fields" do

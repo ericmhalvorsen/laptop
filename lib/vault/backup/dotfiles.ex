@@ -49,10 +49,11 @@ defmodule Vault.Backup.Dotfiles do
     Enum.any?(patterns, fn pattern ->
       cond do
         String.contains?(pattern, "*") ->
-          regex_pattern = pattern
-          |> String.replace(".", "\\.")
-          |> String.replace("*", ".*")
-          |> then(&("^" <> &1 <> "$"))
+          regex_pattern =
+            pattern
+            |> String.replace(".", "\\.")
+            |> String.replace("*", ".*")
+            |> then(&("^" <> &1 <> "$"))
 
           case Regex.compile(regex_pattern) do
             {:ok, regex} -> Regex.match?(regex, item)
@@ -84,7 +85,8 @@ defmodule Vault.Backup.Dotfiles do
       {:ok, %{files_copied: 5, files_skipped: 3, total_size: 12345, backed_up_files: [...]}}
   """
   def backup(source_dir, dest_dir) do
-    with true <- File.dir?(source_dir) || {:error, "source directory does not exist: #{source_dir}"},
+    with true <-
+           File.dir?(source_dir) || {:error, "source directory does not exist: #{source_dir}"},
          :ok <- File.mkdir_p(dest_dir) do
       dotfiles = list_dotfiles(source_dir)
 
@@ -97,7 +99,6 @@ defmodule Vault.Backup.Dotfiles do
            backed_up_files: []
          }}
       else
-
         Progress.start_progress(:dotfiles, "  Dotfiles", length(dotfiles))
 
         results =
@@ -108,9 +109,17 @@ defmodule Vault.Backup.Dotfiles do
 
             result =
               cond do
-                File.dir?(source) -> Vault.Sync.copy_tree(source, dest, return_total_size: true, suppress_errors: true)
-                File.regular?(source) -> Vault.Sync.copy_file(source, dest, return_size: true)
-                true -> {:error, :not_regular}
+                File.dir?(source) ->
+                  Vault.Sync.copy_tree(source, dest,
+                    return_total_size: true,
+                    suppress_errors: true
+                  )
+
+                File.regular?(source) ->
+                  Vault.Sync.copy_file(source, dest, return_size: true)
+
+                true ->
+                  {:error, :not_regular}
               end
 
             Progress.increment(:dotfiles)
@@ -196,7 +205,10 @@ defmodule Vault.Backup.Dotfiles do
                     {:skipped, :is_directory}
 
                   File.regular?(source) ->
-                    case Vault.Sync.copy_file(source, dest, preserve_permissions: true, return_size: true) do
+                    case Vault.Sync.copy_file(source, dest,
+                           preserve_permissions: true,
+                           return_size: true
+                         ) do
                       {:ok, size} -> {:ok, {file, size}}
                       error -> error
                     end

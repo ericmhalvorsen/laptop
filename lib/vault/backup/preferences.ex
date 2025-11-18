@@ -43,6 +43,7 @@ defmodule Vault.Backup.Preferences do
             entries
             |> Enum.filter(fn entry ->
               path = Path.join(prefs_source, entry)
+
               File.regular?(path) and String.ends_with?(entry, ".plist") and
                 not should_exclude?(entry, exclude_patterns)
             end)

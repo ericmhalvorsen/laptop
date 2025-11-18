@@ -7,11 +7,17 @@ defmodule Vault.Commands.RestoreTest do
 
   defp with_env(env, fun) do
     old = Enum.map(env, fn {k, _} -> {k, System.get_env(k)} end)
-    Enum.each(env, fn {k, v} -> if v == :unset, do: System.delete_env(k), else: System.put_env(k, v) end)
+
+    Enum.each(env, fn {k, v} ->
+      if v == :unset, do: System.delete_env(k), else: System.put_env(k, v)
+    end)
+
     try do
       fun.()
     after
-      Enum.each(old, fn {k, v} -> if is_nil(v), do: System.delete_env(k), else: System.put_env(k, v) end)
+      Enum.each(old, fn {k, v} ->
+        if is_nil(v), do: System.delete_env(k), else: System.put_env(k, v)
+      end)
     end
   end
 

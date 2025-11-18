@@ -28,9 +28,11 @@ defmodule Vault.Commands.Save do
 
     backup_dotfiles(home_dir, vault_path)
     backup_local_bin(home_dir, vault_path)
+
     unless opts[:skip_homebrew] do
       backup_homebrew(vault_path)
     end
+
     backup_fonts(home_dir, vault_path)
     backup_app_support(home_dir, vault_path)
     backup_preferences(home_dir, vault_path)
@@ -359,7 +361,9 @@ defmodule Vault.Commands.Save do
   defp backup_brave(home_dir, vault_path) do
     Progress.puts(["\n", Progress.tag("→ Backing up Brave browser...", :cyan)])
 
-    src = Path.join([home_dir, "Library", "Application Support", "BraveSoftware", "Brave-Browser"])
+    src =
+      Path.join([home_dir, "Library", "Application Support", "BraveSoftware", "Brave-Browser"])
+
     dest = Path.join([vault_path, "browser", "brave"])
 
     if File.dir?(src) do
@@ -393,24 +397,31 @@ defmodule Vault.Commands.Save do
 
     if File.dir?(base) do
       File.mkdir_p!(dest_base)
+
       case File.ls(base) do
         {:ok, entries} ->
           vaults = Enum.filter(entries, fn e -> File.dir?(Path.join(base, e)) end)
 
           if Enum.empty?(vaults) do
-            Progress.puts(["  ", Progress.tag("ℹ", :yellow), " No vaults found in ~/Documents/Eric"])
+            Progress.puts([
+              "  ",
+              Progress.tag("ℹ", :yellow),
+              " No vaults found in ~/Documents/Eric"
+            ])
           else
             Enum.each(vaults, fn v ->
               src = Path.join(base, v)
               dest = Path.join(dest_base, v)
               # Clean dest then copy
               File.rm_rf(dest)
+
               case Vault.Sync.copy_tree(src, dest) do
                 :ok -> Progress.puts(["  ", Progress.tag("✓", :green), " Copied vault: ", v])
                 _ -> Progress.puts(["  ", Progress.tag("✗", :red), " Failed vault ", v])
               end
             end)
           end
+
         _ ->
           Progress.puts(["  ", Progress.tag("ℹ", :yellow), " Unable to read ~/Documents/Eric"])
       end

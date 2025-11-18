@@ -16,7 +16,8 @@ defmodule Vault.Application do
 
     Supervisor.start_link(
       children,
-      [strategy: :one_for_one, name: Vault.Supervisor]
+      strategy: :one_for_one,
+      name: Vault.Supervisor
     )
   end
 end

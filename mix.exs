@@ -50,11 +50,11 @@ defmodule Vault.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:excoveralls, "~> 0.18", only: :test},
       {:owl, "~> 0.13"},
       {:ucwidth, "~> 0.2"},
-      {:excoveralls, "~> 0.18", only: :test},
-      {:yaml_elixir, "~> 2.9"},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
+      {:yaml_elixir, "~> 2.9"}
     ]
   end
 end
