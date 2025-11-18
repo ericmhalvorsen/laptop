@@ -34,6 +34,9 @@ mise install
 mix deps.get
 mix escript.build
 
+# Configure git hooks (required - enables pre-commit formatting/linting)
+./hooks/install.sh
+
 # The vault wrapper handles everything automatically
 ./vault --help
 ```
