@@ -1,14 +1,16 @@
 # Git Hooks
 
-This directory contains git hooks for the project.
+This directory contains git hooks for the project. These hooks are tracked in the repository and shared across all developers.
 
 ## Installation
 
-To install the git hooks, run:
+To enable the hooks for your local repository, run:
 
 ```bash
 ./hooks/install.sh
 ```
+
+This configures Git to use this tracked `hooks/` directory instead of the default `.git/hooks/` directory.
 
 ## Pre-commit Hook
 
