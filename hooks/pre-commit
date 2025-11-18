@@ -1,0 +1,47 @@
+#!/bin/sh
+#
+# Pre-commit hook for Elixir projects
+# Runs mix format and credo before allowing commits
+
+echo "Running pre-commit checks..."
+
+# Check if mix is available
+if ! command -v mix > /dev/null 2>&1; then
+  echo "Error: mix command not found. Please ensure Elixir is installed."
+  exit 1
+fi
+
+# Get list of staged .ex and .exs files
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ex|exs)$' || true)
+
+if [ -z "$STAGED_FILES" ]; then
+  echo "No Elixir files to check."
+  exit 0
+fi
+
+echo "Checking code formatting..."
+# Run mix format --check-formatted on staged files
+if ! mix format --check-formatted $STAGED_FILES; then
+  echo ""
+  echo "❌ Code formatting check failed!"
+  echo "Please run 'mix format' to format your code before committing."
+  exit 1
+fi
+
+echo "✓ Code formatting check passed"
+
+echo ""
+echo "Running Credo linting..."
+# Run credo with strict mode
+if ! mix credo --strict; then
+  echo ""
+  echo "❌ Credo linting failed!"
+  echo "Please fix the linting issues before committing."
+  exit 1
+fi
+
+echo "✓ Credo linting passed"
+
+echo ""
+echo "✓ All pre-commit checks passed!"
+exit 0
