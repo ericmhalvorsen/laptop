@@ -1,9 +1,6 @@
 defmodule Vault.Sync do
   @moduledoc """
-  Centralized file synchronization utilities with rsync support.
-
-  Automatically uses rsync when available for better performance,
-  with fallback to File operations when rsync is not available.
+  Wrapper for rsync. Falls back to normal file copy if rsync not available
   """
 
   alias Vault.UI.Progress
@@ -32,6 +29,7 @@ defmodule Vault.Sync do
       Keyword.get(opts, :exclude, [])
       |> Kernel.++(default_excludes())
       |> Enum.uniq()
+
     delete = Keyword.get(opts, :delete, false)
     progress_id = Keyword.get(opts, :progress_id)
     dry_run = Keyword.get(opts, :dry_run, false)
@@ -41,11 +39,19 @@ defmodule Vault.Sync do
 
     cond do
       dry_run ->
-        if exclude == [] do
-          Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " would copy ", source, " -> ", dest])
-        else
-          Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " would copy ", source, " -> ", dest, " (with excludes)"])
+          Progress.puts([
+            "  ",
+            Progress.tag("dry-run:", :light_black),
+            " would copy ",
+            source,
+            " -> ",
+            dest
+          ])
+          if exclude == [] do
+            Progress.puts([" (with excludes)"])
+          end
         end
+
         if return_total_size, do: {:ok, 0}, else: :ok
 
       not File.exists?(source) ->
@@ -53,7 +59,15 @@ defmodule Vault.Sync do
 
       rsync_available?() and progress_id != nil and exclude != [] ->
         # Streaming mode with progress tracking
-        case copy_with_rsync_streaming(source, dest, exclude, delete, progress_id, suppress_errors, suppress_details) do
+        case copy_with_rsync_streaming(
+               source,
+               dest,
+               exclude,
+               delete,
+               progress_id,
+               suppress_errors,
+               suppress_details
+             ) do
           :ok ->
             if return_total_size do
               case compute_total_size_via_rsync_stats(source, exclude) do
@@ -63,16 +77,13 @@ defmodule Vault.Sync do
             else
               :ok
             end
-          other -> other
+
+          other ->
+            other
         end
 
       rsync_available?() ->
-        # Standard rsync mode (no streaming)
-        if return_total_size do
-          copy_with_rsync_and_stats(source, dest, exclude, delete, suppress_errors)
-        else
-          copy_with_rsync(source, dest, exclude, delete, suppress_errors)
-        end
+        copy_with_rsync_and_stats(source, dest, exclude, delete, suppress_errors)
 
       true ->
         # Fallback to File operations
@@ -90,11 +101,13 @@ defmodule Vault.Sync do
     exclude_args = Enum.flat_map(exclude, fn e -> ["--exclude", e] end)
     delete_arg = if delete, do: ["--delete"], else: []
 
-    args = ["-a", "--stats"] ++ delete_arg ++ exclude_args ++ [ensure_trailing_slash(source), dest]
+    args =
+      ["-a", "--stats"] ++ delete_arg ++ exclude_args ++ [ensure_trailing_slash(source), dest]
 
     case System.cmd(rsync, args, stderr_to_stdout: true) do
       {out, 0} ->
         parse_total_size_from_rsync_stats(out)
+
       {out, code} ->
         error_lines =
           out
@@ -132,11 +145,13 @@ defmodule Vault.Sync do
       |> String.split("\n", trim: true)
       |> Enum.find(fn l ->
         String.contains?(String.downcase(l), "total file size:") or
-        String.contains?(String.downcase(l), "total size of files:")
+          String.contains?(String.downcase(l), "total size of files:")
       end)
 
     case line do
-      nil -> {:ok, 0}
+      nil ->
+        {:ok, 0}
+
       l ->
         # extract number before " bytes"
         case Regex.run(~r/(\d+)\s+bytes/i, l) do
@@ -145,7 +160,9 @@ defmodule Vault.Sync do
               {n, _} -> {:ok, n}
               _ -> {:ok, 0}
             end
-          _ -> {:ok, 0}
+
+          _ ->
+            {:ok, 0}
         end
     end
   end
@@ -172,7 +189,15 @@ defmodule Vault.Sync do
 
     cond do
       dry_run ->
-        Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " would copy ", source, " -> ", dest])
+        Progress.puts([
+          "  ",
+          Progress.tag("dry-run:", :light_black),
+          " would copy ",
+          source,
+          " -> ",
+          dest
+        ])
+
         if return_size, do: {:ok, 0}, else: :ok
 
       not File.exists?(source) ->
@@ -184,6 +209,7 @@ defmodule Vault.Sync do
         File.mkdir_p(Path.dirname(dest))
 
         rsync = System.find_executable("rsync")
+
         if is_nil(rsync) do
           with :ok <- File.mkdir_p(Path.dirname(dest)),
                :ok <- File.cp(source, dest) do
@@ -204,7 +230,9 @@ defmodule Vault.Sync do
           args = if preserve_permissions, do: ["-a", source, dest], else: [source, dest]
 
           case System.cmd(rsync, args, stderr_to_stdout: true) do
-            {_out, 0} -> maybe_return_size(:ok, dest, return_size)
+            {_out, 0} ->
+              maybe_return_size(:ok, dest, return_size)
+
             {out, code} ->
               Progress.puts([Progress.tag("✗ rsync failed (#{code}): ", :red), out])
               {:error, :rsync_failed}
@@ -241,7 +269,9 @@ defmodule Vault.Sync do
       rsync = System.find_executable("rsync")
       exclude_args = Enum.flat_map(exclude, fn p -> ["--exclude", p] end)
       # -n dry-run, -a archive, --delete to mirror behavior, --out-format=%n prints paths
-      args = ["-na", "--delete", "--out-format=%n"] ++ exclude_args ++ [ensure_trailing_slash(source), dest]
+      args =
+        ["-na", "--delete", "--out-format=%n"] ++
+          exclude_args ++ [ensure_trailing_slash(source), dest]
 
       case System.cmd(rsync, args, stderr_to_stdout: true) do
         {output, 0} ->
@@ -300,6 +330,7 @@ defmodule Vault.Sync do
     case System.cmd(rsync, args, stderr_to_stdout: true) do
       {_out, 0} ->
         :ok
+
       {out, code} ->
         # Extract rsync error lines to highlight problematic files
         error_lines =
@@ -312,6 +343,7 @@ defmodule Vault.Sync do
             Progress.puts([Progress.tag("✗ rsync failed (#{code})\n", :red), out])
           else
             Progress.puts([Progress.tag("✗ rsync failed (#{code}). Problem lines:\n", :red)])
+
             Enum.each(error_lines, fn line ->
               Progress.puts(["  ", line, "\n"])
             end)
@@ -323,7 +355,15 @@ defmodule Vault.Sync do
     end
   end
 
-  defp copy_with_rsync_streaming(source, dest, exclude, delete, progress_id, suppress_errors, suppress_details) do
+  defp copy_with_rsync_streaming(
+         source,
+         dest,
+         exclude,
+         delete,
+         progress_id,
+         suppress_errors,
+         suppress_details
+       ) do
     # First check if there's anything to transfer
     count = compute_transfer_count(source, dest, exclude)
 
@@ -338,22 +378,30 @@ defmodule Vault.Sync do
       exclude_args = Enum.flat_map(exclude, fn pattern -> ["--exclude", pattern] end)
       delete_arg = if delete, do: ["--delete"], else: []
 
-      args = ["-a"] ++ delete_arg ++ ["--out-format=%n"] ++ exclude_args ++
-             [ensure_trailing_slash(source), dest]
+      args =
+        ["-a"] ++
+          delete_arg ++
+          ["--out-format=%n"] ++
+          exclude_args ++
+          [ensure_trailing_slash(source), dest]
 
-      port = Port.open({:spawn_executable, rsync}, [
-        :binary,
-        {:args, args},
-        :exit_status,
-        :stderr_to_stdout
-      ])
+      port =
+        Port.open({:spawn_executable, rsync}, [
+          :binary,
+          {:args, args},
+          :exit_status,
+          :stderr_to_stdout
+        ])
 
       case stream_rsync_output(port, progress_id, "", 0, nil, suppress_details) do
-        :ok -> :ok
+        :ok ->
+          :ok
+
         _ ->
           if not suppress_errors do
             Progress.puts([Progress.tag("✗ rsync failed\n", :red)])
           end
+
           :ok
       end
     end
@@ -369,10 +417,18 @@ defmodule Vault.Sync do
         {new_count, new_last} =
           Enum.reduce(lines, {inc_count, last_detail}, fn line, {acc, last} ->
             cond do
-              line == "" -> {acc, last}
-              line == "sending incremental file list" -> {acc, last}
-              String.ends_with?(line, "/") -> {acc, last}
-              line == last -> {acc, last}
+              line == "" ->
+                {acc, last}
+
+              line == "sending incremental file list" ->
+                {acc, last}
+
+              String.ends_with?(line, "/") ->
+                {acc, last}
+
+              line == last ->
+                {acc, last}
+
               true ->
                 if not suppress_details do
                   case sanitize_detail(line) do
@@ -380,6 +436,7 @@ defmodule Vault.Sync do
                     safe -> Progress.set_detail(progress_id, safe)
                   end
                 end
+
                 Progress.increment(progress_id)
                 {acc + 1, line}
             end
@@ -400,7 +457,9 @@ defmodule Vault.Sync do
 
   defp split_lines(data) do
     case String.split(data, "\n", parts: :infinity) do
-      [] -> {[], ""}
+      [] ->
+        {[], ""}
+
       parts ->
         # If data ends with newline, last part is ""
         # Otherwise, keep last part as buffer remainder
@@ -419,7 +478,9 @@ defmodule Vault.Sync do
       File.mkdir_p!(dest)
 
       case File.cp_r(source, dest, on_conflict: fn _src, _dest -> true end) do
-        {:ok, _} -> :ok
+        {:ok, _} ->
+          :ok
+
         {:error, reason, _file} ->
           Progress.puts([Progress.tag("✗ copy failed: ", :red), to_string(reason)])
           :ok
@@ -504,6 +565,7 @@ defmodule Vault.Sync do
 
   defp sanitize_detail(line) when is_binary(line) do
     trimmed = String.trim(line)
+
     cond do
       trimmed == "" -> nil
       not String.valid?(trimmed) -> nil
@@ -512,6 +574,7 @@ defmodule Vault.Sync do
       true -> trimmed
     end
   end
+
   defp sanitize_detail(_), do: nil
 
   defp maybe_return_size(:ok, dest, true) do
@@ -520,6 +583,7 @@ defmodule Vault.Sync do
       {:error, reason} -> {:error, reason}
     end
   end
+
   defp maybe_return_size(:ok, _dest, false), do: :ok
   defp maybe_return_size(other, _dest, _flag), do: other
 
@@ -530,6 +594,7 @@ defmodule Vault.Sync do
           files
           |> Enum.map(fn file ->
             dst_file = Path.join(dest, file)
+
             case FileUtils.file_size(dst_file) do
               {:ok, size} -> size
               _ -> 0
@@ -539,9 +604,11 @@ defmodule Vault.Sync do
 
         {:ok, total_size}
 
-      {:error, reason} -> {:error, reason}
+      {:error, reason} ->
+        {:error, reason}
     end
   end
+
   defp maybe_return_total_size(:ok, _dest, _exclude, false), do: :ok
   defp maybe_return_total_size(other, _dest, _exclude, _flag), do: other
 end

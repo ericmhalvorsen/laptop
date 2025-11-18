@@ -7,7 +7,7 @@ defmodule Vault.Commands.Save do
   alias Vault.Backup.Dotfiles
   alias Vault.Backup.Fonts
   alias Vault.Backup.Homebrew
-  alias Vault.Backup.HomeDirs
+  alias Vault.Backup.HomeDirssync
   alias Vault.Backup.Preferences
   alias Vault.Backup.Sensitive
   alias Vault.Sync
@@ -37,7 +37,6 @@ defmodule Vault.Commands.Save do
     backup_app_support(home_dir, vault_path)
     backup_preferences(home_dir, vault_path)
     backup_sensitive(home_dir, vault_path)
-    backup_brave(home_dir, vault_path)
     backup_obsidian(home_dir, vault_path)
     backup_home_directories(home_dir, vault_path)
 
@@ -53,15 +52,13 @@ defmodule Vault.Commands.Save do
       "\n",
       Progress.tag("  ✓ Homebrew", :green),
       "\n",
-      Progress.tag("  ✓ Fonts", :green),
+      Progress.tag("  ✓ Fonts" :green),
       "\n",
       Progress.tag("  ✓ Application Support", :green),
       "\n",
       Progress.tag("  ✓ Preferences", :green),
       "\n",
       Progress.tag("  ✓ Sensitive (SSH, GPG, AWS, passwords)", :green),
-      "\n",
-      Progress.tag("  ✓ Browser (Brave)", :green),
       "\n",
       Progress.tag("  ✓ Obsidian vaults", :green),
       "\n",
