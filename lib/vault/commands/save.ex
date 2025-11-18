@@ -7,7 +7,7 @@ defmodule Vault.Commands.Save do
   alias Vault.Backup.Dotfiles
   alias Vault.Backup.Fonts
   alias Vault.Backup.Homebrew
-  alias Vault.Backup.HomeDirssync
+  alias Vault.Backup.HomeDirs
   alias Vault.Backup.Preferences
   alias Vault.Backup.Sensitive
   alias Vault.Sync
@@ -52,7 +52,7 @@ defmodule Vault.Commands.Save do
       "\n",
       Progress.tag("  ✓ Homebrew", :green),
       "\n",
-      Progress.tag("  ✓ Fonts" :green),
+      Progress.tag("  ✓ Fonts", :green),
       "\n",
       Progress.tag("  ✓ Application Support", :green),
       "\n",

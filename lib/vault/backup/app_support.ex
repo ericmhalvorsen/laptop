@@ -86,10 +86,7 @@ defmodule Vault.Backup.AppSupport do
               dest = Path.join(app_support_dest, app_dir)
 
               result =
-                case Vault.Sync.copy_tree(source, dest,
-                       return_total_size: true,
-                       suppress_errors: true
-                     ) do
+                case Vault.Sync.copy_tree(source, dest, return_total_size: true) do
                   {:ok, size} -> {:ok, {app_dir, size}}
                   _ -> {:skipped, app_dir}
                 end

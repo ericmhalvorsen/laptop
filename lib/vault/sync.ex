@@ -34,22 +34,20 @@ defmodule Vault.Sync do
     progress_id = Keyword.get(opts, :progress_id)
     dry_run = Keyword.get(opts, :dry_run, false)
     return_total_size = Keyword.get(opts, :return_total_size, false)
-    suppress_errors = Keyword.get(opts, :suppress_errors, false)
-    suppress_details = Keyword.get(opts, :suppress_details, false)
 
     cond do
       dry_run ->
-          Progress.puts([
-            "  ",
-            Progress.tag("dry-run:", :light_black),
-            " would copy ",
-            source,
-            " -> ",
-            dest
-          ])
-          if exclude == [] do
-            Progress.puts([" (with excludes)"])
-          end
+        Progress.puts([
+          "  ",
+          Progress.tag("dry-run:", :light_black),
+          " would copy ",
+          source,
+          " -> ",
+          dest
+        ])
+
+        if exclude == [] do
+          Progress.puts([" (with excludes)"])
         end
 
         if return_total_size, do: {:ok, 0}, else: :ok
@@ -64,9 +62,7 @@ defmodule Vault.Sync do
                dest,
                exclude,
                delete,
-               progress_id,
-               suppress_errors,
-               suppress_details
+               progress_id
              ) do
           :ok ->
             if return_total_size do
@@ -83,18 +79,15 @@ defmodule Vault.Sync do
         end
 
       rsync_available?() ->
-        copy_with_rsync_and_stats(source, dest, exclude, delete, suppress_errors)
+        copy_with_rsync_and_stats(source, dest, exclude, delete)
 
       true ->
-        # Fallback to File operations
-        case copy_with_file_operations(source, dest, exclude, progress_id) do
-          :ok -> maybe_return_total_size(:ok, dest, exclude, return_total_size)
-          other -> other
-        end
+        # Do later on 
+        {:ok, 0}
     end
   end
 
-  defp copy_with_rsync_and_stats(source, dest, exclude, delete, suppress_errors) do
+  defp copy_with_rsync_and_stats(source, dest, exclude, delete) do
     File.mkdir_p!(dest)
 
     rsync = System.find_executable("rsync")
@@ -114,13 +107,11 @@ defmodule Vault.Sync do
           |> String.split("\n", trim: true)
           |> Enum.filter(fn line -> String.starts_with?(line, "rsync:") end)
 
-        if not suppress_errors do
-          if error_lines == [] do
-            Progress.puts([Progress.tag("✗ rsync failed (#{code})\n", :red), out])
-          else
-            Progress.puts([Progress.tag("✗ rsync failed (#{code}). Problem lines:\n", :red)])
-            Enum.each(error_lines, fn line -> Progress.puts(["  ", line, "\n"]) end)
-          end
+        if error_lines == [] do
+          Progress.puts([Progress.tag("✗ rsync failed (#{code})\n", :red), out])
+        else
+          Progress.puts([Progress.tag("✗ rsync failed (#{code}). Problem lines:\n", :red)])
+          Enum.each(error_lines, fn line -> Progress.puts(["  ", line, "\n"]) end)
         end
 
         {:ok, 0}
@@ -318,7 +309,7 @@ defmodule Vault.Sync do
     ]
   end
 
-  defp copy_with_rsync(source, dest, exclude, delete, suppress_errors) do
+  defp copy_with_rsync(source, dest, exclude, delete) do
     File.mkdir_p!(dest)
 
     rsync = System.find_executable("rsync")
@@ -338,16 +329,19 @@ defmodule Vault.Sync do
           |> String.split("\n", trim: true)
           |> Enum.filter(fn line -> String.starts_with?(line, "rsync:") end)
 
-        if not suppress_errors do
-          if error_lines == [] do
-            Progress.puts([Progress.tag("✗ rsync failed (#{code})\n", :red), out])
-          else
-            Progress.puts([Progress.tag("✗ rsync failed (#{code}). Problem lines:\n", :red)])
+        if error_lines == [] do
+          Progress.puts([Progress.tag("✗ rsync failed (#{code})\n", :red), out])
+        else
+          Progress.puts([Progress.tag("✗ rsync failed (#{code}). Problem lines:\n", :red)])
 
-            Enum.each(error_lines, fn line ->
-              Progress.puts(["  ", line, "\n"])
-            end)
-          end
+          # error_lines
+          # |> Enum.each
+          # |> Progress.tag(:red)
+          # |> Progress.puts
+
+          Enum.each(error_lines, fn line ->
+            Progress.puts(["  ", line, "\n"])
+          end)
         end
 
         # Keep non-fatal behavior
@@ -360,9 +354,7 @@ defmodule Vault.Sync do
          dest,
          exclude,
          delete,
-         progress_id,
-         suppress_errors,
-         suppress_details
+         progress_id
        ) do
     # First check if there's anything to transfer
     count = compute_transfer_count(source, dest, exclude)
@@ -393,21 +385,19 @@ defmodule Vault.Sync do
           :stderr_to_stdout
         ])
 
-      case stream_rsync_output(port, progress_id, "", 0, nil, suppress_details) do
+      case stream_rsync_output(port, progress_id, "", 0, nil) do
         :ok ->
           :ok
 
         _ ->
-          if not suppress_errors do
-            Progress.puts([Progress.tag("✗ rsync failed\n", :red)])
-          end
+          Progress.puts([Progress.tag("✗ rsync failed\n", :red)])
 
           :ok
       end
     end
   end
 
-  defp stream_rsync_output(port, progress_id, buffer, inc_count, last_detail, suppress_details) do
+  defp stream_rsync_output(port, progress_id, buffer, inc_count, last_detail) do
     receive do
       {^port, {:data, data}} ->
         # Accumulate and process by lines
@@ -430,11 +420,9 @@ defmodule Vault.Sync do
                 {acc, last}
 
               true ->
-                if not suppress_details do
-                  case sanitize_detail(line) do
-                    nil -> :ok
-                    safe -> Progress.set_detail(progress_id, safe)
-                  end
+                case sanitize_detail(line) do
+                  nil -> :ok
+                  safe -> Progress.set_detail(progress_id, safe)
                 end
 
                 Progress.increment(progress_id)
@@ -442,7 +430,7 @@ defmodule Vault.Sync do
             end
           end)
 
-        stream_rsync_output(port, progress_id, rest, new_count, new_last, suppress_details)
+        stream_rsync_output(port, progress_id, rest, new_count, new_last)
 
       {^port, {:exit_status, 0}} ->
         :ok
@@ -462,7 +450,6 @@ defmodule Vault.Sync do
 
       parts ->
         # If data ends with newline, last part is ""
-        # Otherwise, keep last part as buffer remainder
         {Enum.slice(parts, 0, length(parts) - 1), List.last(parts)}
     end
   end

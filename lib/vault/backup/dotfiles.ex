@@ -110,10 +110,7 @@ defmodule Vault.Backup.Dotfiles do
             result =
               cond do
                 File.dir?(source) ->
-                  Vault.Sync.copy_tree(source, dest,
-                    return_total_size: true,
-                    suppress_errors: true
-                  )
+                  Vault.Sync.copy_tree(source, dest, return_total_size: true)
 
                 File.regular?(source) ->
                   Vault.Sync.copy_file(source, dest, return_size: true)
