@@ -1,4 +1,8 @@
 defmodule Vault.State do
+  @moduledoc """
+  State storage. Mainly holds progress counts.
+  """
+
   use Agent
 
   def update_progress(id, update_func) do

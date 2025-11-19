@@ -66,7 +66,7 @@ defmodule Vault.Sync do
              ) do
           :ok ->
             if return_total_size do
-              case compute_total_size_via_rsync_stats(source, exclude) do
+              case compute_total_size(source, exclude) do
                 {:ok, size} -> {:ok, size}
                 _ -> maybe_return_total_size(:ok, dest, exclude, true)
               end
@@ -82,7 +82,7 @@ defmodule Vault.Sync do
         copy_with_rsync_and_stats(source, dest, exclude, delete)
 
       true ->
-        # Do later on 
+        # Do later on
         {:ok, 0}
     end
   end
@@ -99,40 +99,28 @@ defmodule Vault.Sync do
 
     case System.cmd(rsync, args, stderr_to_stdout: true) do
       {out, 0} ->
-        parse_total_size_from_rsync_stats(out)
+        parse_total_size(out)
 
       {out, code} ->
-        error_lines =
-          out
-          |> String.split("\n", trim: true)
-          |> Enum.filter(fn line -> String.starts_with?(line, "rsync:") end)
-
-        if error_lines == [] do
-          Progress.puts([Progress.tag("✗ rsync failed (#{code})\n", :red), out])
-        else
-          Progress.puts([Progress.tag("✗ rsync failed (#{code}). Problem lines:\n", :red)])
-          Enum.each(error_lines, fn line -> Progress.puts(["  ", line, "\n"]) end)
-        end
-
-        {:ok, 0}
+        print_error(out, code)
     end
   end
 
-  defp compute_total_size_via_rsync_stats(source, exclude) do
+  defp compute_total_size(source, exclude) do
     rsync = System.find_executable("rsync")
     exclude_args = Enum.flat_map(exclude, fn p -> ["--exclude", p] end)
     args = ["-na", "--stats"] ++ exclude_args ++ [ensure_trailing_slash(source), "/dev/null"]
 
     case System.cmd(rsync, args, stderr_to_stdout: true) do
-      {out, 0} -> parse_total_size_from_rsync_stats(out)
+      {out, 0} -> parse_total_size(out)
       {_out, _code} -> {:ok, 0}
     end
   end
 
-  defp parse_total_size_from_rsync_stats(output) do
+  defp parse_total_size(rsync_output) do
     # Try to match either "Total file size:" or "total size of files:" variants
     line =
-      output
+      rsync_output
       |> String.split("\n", trim: true)
       |> Enum.find(fn l ->
         String.contains?(String.downcase(l), "total file size:") or
@@ -156,6 +144,17 @@ defmodule Vault.Sync do
             {:ok, 0}
         end
     end
+  end
+
+  def print_error(out, code) do
+    Progress.puts([Progress.tag("✗ rsync failed (#{code})\n", :red), out])
+
+    out
+    |> String.split("\n", trim: true)
+    |> Enum.filter(fn line -> String.starts_with?(line, "rsync:") end)
+    |> Enum.each(fn line -> Progress.puts(["  ", line, "\n"]) end)
+
+    {:ok, 0}
   end
 
   @doc """
