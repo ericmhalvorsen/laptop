@@ -1,2 +1,4 @@
-$EDITOR "$HOME/Library/Application Support/com.mitchellh.ghostty/config"
+# $EDITOR "$HOME/Library/Application Support/com.mitchellh.ghostty/config"
+
+$EDITOR "$HOME/.config/ghostty/config"
 

@@ -28,7 +28,7 @@ start() {
     echo "    No API KEY found - starting in normal mode    "
     echo "=================================================="
 
-    exec specstory run claude -c "claude $@" --no-cloud-sync
+    exec claude $@
 }
 
 start_with_key() {
@@ -36,7 +36,7 @@ start_with_key() {
     echo "    WARNING: USING API KEY    "
     echo "=============================="
 
-    exec specstory run claude -c "claude --settings '{ \"apiKeyHelper\": \"~/.claude/anthropic_key.sh\" }' $*" --no-cloud-sync
+    exec claude --settings '{ "apiKeyHelper": "~/.claude/anthropic_key.sh" }' $*
 }
 
 # Determine which mode to use

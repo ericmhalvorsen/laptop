@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+remote_url=$(git remote get-url origin 2>/dev/null)
+
+if [ -z "$remote_url" ]; then
+    echo "Error: Not a git repository or no remote origin found"
+    exit 1
+fi
+
+if [[ $remote_url == git@* ]]; then
+    remote_url=$(echo "$remote_url" | sed -e 's/:/\//g' -e 's/git@/https:\/\//g' -e 's/\.git$//')
+else
+    remote_url=$(echo "$remote_url" | sed -e 's/\.git$//')
+fi
+
+if command -v xdg-open &> /dev/null; then
+    xdg-open "$remote_url"  # Linux
+elif command -v open &> /dev/null; then
+    open "$remote_url"      # macOS
+elif command -v start &> /dev/null; then
+    start "$remote_url"     # Windows
+else
+    echo "Error: Could not detect how to open browser"
+    echo "URL: $remote_url"
+    exit 1
+fi
+
