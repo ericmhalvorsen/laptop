@@ -173,33 +173,33 @@ defmodule Vault.Sync do
   Useful for setting up progress bars before copying.
   """
   def compute_transfer_count(source, dest, exclude \\ []) do
-    if available?() do
-      is_file = File.regular?(source)
-      rsync = System.find_executable("rsync")
-      exclude_args = Enum.flat_map(exclude, fn p -> ["--exclude", p] end)
+    is_file = File.regular?(source)
+    rsync = System.find_executable("rsync")
+    exclude_args = Enum.flat_map(exclude, fn p -> ["--exclude", p] end)
 
-      # For directories, add trailing slash. For files, use as-is
-      source_arg = if is_file, do: source, else: ensure_trailing_slash(source)
+    source_arg = ensure_trailing_slash(if is_file, do: Path.dirname(source), else: source)
+    from_files = if is_file, do: ["--files-from=#{Path.basename(source)}"], else: []
 
-      # -n dry-run, -a archive, --delete to mirror behavior, --out-format=%n prints paths
-      args =
-        ["-na", "--delete", "--out-format=%n"] ++
-          exclude_args ++ [source_arg, dest]
+    # -n dry-run, -a archive, --delete to mirror behavior, --out-format=%n prints paths
+    args =
+      ["-na", "--delete", "--out-format=%n"] ++
+        from_files ++
+        exclude_args ++
+        [source_arg, dest]
 
-      case System.cmd(rsync, args, stderr_to_stdout: true) do
-        {output, 0} ->
-          output
-          |> String.split("\n", trim: true)
-          |> Enum.reject(&(&1 == "sending incremental file list"))
-          |> Enum.reject(&String.ends_with?(&1, "/"))
-          |> length()
+    :logger.error(args)
 
-        {_out, _code} ->
-          1
-      end
-    else
-      # Fallback to manual counting
-      if File.regular?(source), do: 1, else: count_files(source, exclude)
+    case System.cmd(rsync, args, stderr_to_stdout: true) do
+      {output, 0} ->
+        output
+        |> String.split("\n", trim: true)
+        |> Enum.reject(&(&1 == "sending incremental file list"))
+        |> Enum.reject(&String.ends_with?(&1, "/"))
+        |> length()
+
+      {output, _code} ->
+        Progress.puts([Progress.tag("Error computing transfer count: #{output}", :red)])
+        1
     end
   end
 

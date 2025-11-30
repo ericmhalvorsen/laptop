@@ -1,0 +1,10 @@
+claude
+claude-code
+docker-desktop
+font-sekuya
+google-chrome
+ngrok
+postgres-unofficial
+rustdesk
+visual-studio-code
+yaak

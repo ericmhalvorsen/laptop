@@ -7,10 +7,12 @@ defmodule Vault.UI.Progress do
   @partials ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
   @bar_width_ratio 0.5
 
+  @spec enabled? :: boolean()
   def enabled? do
     System.get_env("DISABLE_VAULT_OUTPUT") != "1"
   end
 
+  @spec test_env? :: boolean()
   defp test_env? do
     Application.get_env(:vault, :env, :prod) == :test
   end
@@ -19,6 +21,8 @@ defmodule Vault.UI.Progress do
 
   def start_progress(id, label, total) do
     Vault.State.update_progress(id, fn _ -> %{total: total, current: 0} end)
+
+    :logger.info("TOTAL for #{id}: #{total}")
 
     if enabled?() && !test_env?() && total > 0 do
       Owl.ProgressBar.start(
@@ -36,6 +40,7 @@ defmodule Vault.UI.Progress do
     end
   end
 
+  @spec set_detail(any(), any()) :: :ok
   def set_detail(id, text) do
     if enabled?() && !test_env?() do
       safe_text =

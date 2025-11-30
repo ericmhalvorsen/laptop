@@ -22,6 +22,15 @@ NC='\033[0m' # No Color
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VAULT_ESCRIPT="$SCRIPT_DIR/.vault-escript"
+RELOAD=false
+
+# Check for --dev flag
+for arg in "$@"; do
+    if [ "$arg" = "--dev" ]; then
+        RELOAD=true
+        break
+    fi
+done
 
 if [ ! -f "$VAULT_ESCRIPT" ]; then
     echo -e "${BLUE}╔═══════════════════════════════════════════════════════════╗${NC}"
@@ -82,6 +91,14 @@ fi
 if [ ! -f "$VAULT_ESCRIPT" ]; then
     echo -e "${RED}Error: Failed to build vault escript${NC}"
     exit 1
+fi
+
+if [ "$RELOAD" = true ]; then
+    echo -e "${YELLOW}==> Rebuilding vault (--dev mode)${NC}"
+    cd "$SCRIPT_DIR"
+    mise exec -- mix escript.build
+    chmod +x "$VAULT_ESCRIPT"
+    echo ""
 fi
 
 exec "$VAULT_ESCRIPT" "$@"
