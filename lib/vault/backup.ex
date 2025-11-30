@@ -13,6 +13,14 @@ defmodule Vault.Backup do
   alias Vault.Utils.FileUtils
   alias Vault.State
 
+  @spec backup(
+          any(),
+          binary()
+          | maybe_improper_list(
+              binary() | maybe_improper_list(any(), binary() | []) | char(),
+              binary() | []
+            )
+        ) :: {:ok, %{backed_up: list(), skipped: list(), stats: map(), summary: [...]}}
   @doc """
   Backs up to the destination dir
 
@@ -37,37 +45,33 @@ defmodule Vault.Backup do
     dry_run = Keyword.get(opts, :dry_run, false)
     base_exclude = Keyword.get(opts, :exclude, [])
     tracker = State.get(:backup_tracker) || MapSet.new()
+    flatten_paths? = Keyword.get(opts, :flatten_paths, false)
 
     dirs = dirs || []
 
     {updated_tracker, results} =
-      Enum.reduce(dirs, {tracker, []}, fn dir, {tracker_acc, acc} ->
-        source_path = Path.join(source_dir, dir)
-        dest_path = Path.join(vault_path, dir)
+      Enum.reduce(dirs, {tracker, []}, fn path, {tracker_acc, acc} ->
+        source_path = Path.join(source_dir, path)
+        relative_dest = if flatten_paths?, do: Path.basename(path), else: path
+        dest_path = Path.join(vault_path, relative_dest)
 
-        if File.dir?(source_path) do
-          progress_id = String.to_atom("backup_" <> (dir |> String.replace("/", "_")))
+        progress_id = String.to_atom("backup_" <> (path |> String.replace("/", "_")))
 
-          exclude_patterns =
-            base_exclude ++
-              tracker_excludes_for_dir(dir, tracker_acc)
+        exclude_patterns = base_exclude ++ tracker_excludes_for_dir(path, tracker_acc)
 
-          unless dry_run do
-            File.mkdir_p!(dest_path)
-            Progress.puts(["  ", Path.basename(source_path), " ", Progress.tag("(Done)", :green)])
-            :ok
+        unless dry_run do
+          File.mkdir_p!(Path.dirname(dest_path))
+          Progress.puts(["  ", Path.basename(source_path), " ", Progress.tag("(Done)", :green)])
+          :ok
 
-            Sync.copy_tree(source_path, dest_path,
-              exclude: exclude_patterns,
-              delete: true,
-              progress_id: progress_id
-            )
-          end
-
-          {MapSet.put(tracker_acc, dir), [{:backed_up, dir} | acc]}
-        else
-          {tracker_acc, [{:skipped, dir} | acc]}
+          Sync.copy_tree(source_path, dest_path,
+            exclude: exclude_patterns,
+            delete: File.dir?(source_path),
+            progress_id: progress_id
+          )
         end
+
+        {MapSet.put(tracker_acc, path), [{:backed_up, path} | acc]}
       end)
 
     backed_up = collect_results(results, :backed_up)
@@ -86,6 +90,8 @@ defmodule Vault.Backup do
      }}
   end
 
+  @spec homebrew(any()) ::
+          {:error, atom() | <<_::64, _::_*8>>} | {:ok, %{stats: map(), summary: [...]}}
   @doc """
   Backs up Homebrew data to the specified destination directory.
 

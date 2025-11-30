@@ -3,6 +3,13 @@ defmodule Vault.Utils.FileUtils do
   Utility functions for file operations in Vault.
   """
 
+  @spec list_files_recursive(
+          binary()
+          | maybe_improper_list(
+              binary() | maybe_improper_list(any(), binary() | []) | char(),
+              binary() | []
+            )
+        ) :: {:error, atom() | {:no_translation, binary()}} | {:ok, list()}
   def list_files_recursive(dir, opts \\ []) do
     exclude_patterns = Keyword.get(opts, :exclude, [])
 
@@ -34,6 +41,8 @@ defmodule Vault.Utils.FileUtils do
     end
   end
 
+  @spec output_file(any(), any(), any()) ::
+          {:error, <<_::64, _::_*8>>} | {:ok, :skipped | non_neg_integer()}
   def output_file(dest, lines, dry_run) do
     if dry_run do
       {:ok, :skipped}
@@ -47,6 +56,14 @@ defmodule Vault.Utils.FileUtils do
     end
   end
 
+  @spec ensure_dir(any(), any()) ::
+          {:error, atom()}
+          | {:ok,
+             binary()
+             | maybe_improper_list(
+                 binary() | maybe_improper_list(any(), binary() | []) | char(),
+                 binary() | []
+               )}
   def ensure_dir(_path, true), do: {:ok, "dry_run"}
 
   def ensure_dir(path, _) do
@@ -56,10 +73,17 @@ defmodule Vault.Utils.FileUtils do
     end
   end
 
-  def expand_contents(root, contents) when is_binary(root) and is_list(contents) do
-    expanded_root = Path.expand(root)
-
+  @spec expand_contents(binary(), nil | binary() | maybe_improper_list()) :: list()
+  def expand_contents(root, contents) when is_binary(root) do
     contents
+    |> normalize_contents()
+    |> do_expand_contents(root)
+  end
+
+  defp do_expand_contents(contents_list, root) do
+    expanded_root = expand_path(root)
+
+    contents_list
     |> Enum.flat_map(fn entry ->
       case String.contains?(entry, "*") do
         true ->
@@ -75,25 +99,47 @@ defmodule Vault.Utils.FileUtils do
           |> Enum.map(&Path.relative_to(&1, expanded_root))
 
         false ->
-          [normalize_relative(entry)]
+          expanded_entry = expand_path(entry, expanded_root)
+          [Path.relative_to(expanded_entry, expanded_root)]
       end
     end)
     |> Enum.uniq()
   end
 
-  defp normalize_relative(path) do
-    cond do
-      Path.type(path) == :absolute ->
-        path
+  @spec expand_path(nil | binary(), nil | binary()) :: nil | binary()
+  def expand_path(nil, nil), do: nil
 
-      String.starts_with?(path, "./") ->
-        String.trim_leading(path, "./")
+  def expand_path(path, nil) do
+    expand_path(path, File.cwd!())
+  end
+
+  def expand_path(path, root) when is_binary(path) do
+    cond do
+      String.starts_with?(path, "~") ->
+        Path.join(System.user_home!(), String.trim_leading(path, "~/"))
+
+      String.starts_with?(path, "/") ->
+        path
 
       true ->
-        path
+        Path.expand("#{root}/#{path}")
     end
   end
 
+  @spec expand_path(nil | binary()) :: nil | binary()
+  def expand_path(path), do: expand_path(path, File.cwd!())
+
+  defp normalize_contents(nil), do: []
+  defp normalize_contents(single) when is_binary(single), do: [single]
+  defp normalize_contents(list) when is_list(list), do: list
+
+  @spec file_size(
+          binary()
+          | maybe_improper_list(
+              binary() | maybe_improper_list(any(), binary() | []) | char(),
+              binary() | []
+            )
+        ) :: {:error, atom()} | {:ok, :undefined | non_neg_integer()}
   def file_size(path) do
     case File.stat(path) do
       {:ok, %{size: size}} -> {:ok, size}
@@ -101,6 +147,7 @@ defmodule Vault.Utils.FileUtils do
     end
   end
 
+  @spec format_size(non_neg_integer()) :: String.t()
   def format_size(bytes) when bytes < 1024, do: "#{bytes} B"
   def format_size(bytes) when bytes < 1_048_576, do: "#{Float.round(bytes / 1024, 1)} KB"
   def format_size(bytes) when bytes < 1_073_741_824, do: "#{Float.round(bytes / 1_048_576, 1)} MB"
@@ -108,6 +155,7 @@ defmodule Vault.Utils.FileUtils do
 
   # Private
 
+  @spec should_exclude?(binary(), list()) :: boolean()
   defp should_exclude?(entry, patterns) do
     Enum.any?(patterns, fn pattern ->
       String.contains?(entry, pattern) or entry == pattern

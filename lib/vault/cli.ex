@@ -20,7 +20,9 @@ defmodule Vault.CLI do
           vault_path: :string,
           verbose: :boolean,
           dry_run: :boolean,
-          help: :boolean
+          help: :boolean,
+          git_only: :boolean,
+          vault_only: :boolean
         ],
         aliases: [
           c: :config_path,
@@ -80,6 +82,8 @@ defmodule Vault.CLI do
       "  -v, --vault-path PATH       Vault directory path\n",
       "  --verbose                   Verbose output\n",
       "  --dry-run                   Dry run (no changes)\n",
+      "  --git-only                 Run only git-backed steps (skip vault steps)\n",
+      "  --vault-only               Run only vault steps (skip git-backed steps)\n",
       "  -h, --help                  Show help\n"
     ])
   end
