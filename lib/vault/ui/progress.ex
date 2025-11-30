@@ -20,7 +20,7 @@ defmodule Vault.UI.Progress do
   def start_progress(id, label, total) do
     Vault.State.update_progress(id, fn _ -> %{total: total, current: 0} end)
 
-    if enabled?() && !test_env?() do
+    if enabled?() && !test_env?() && total > 0 do
       Owl.ProgressBar.start(
         id: id,
         label: label,
@@ -36,6 +36,20 @@ defmodule Vault.UI.Progress do
     end
   end
 
+  def set_detail(id, text) do
+    if enabled?() && !test_env?() do
+      safe_text =
+        case text do
+          bin when is_binary(bin) -> String.slice(bin, 0, 200)
+          other -> to_string(other) |> String.slice(0, 200)
+        end
+
+      Owl.LiveScreen.update({:detail, id}, safe_text)
+    else
+      :ok
+    end
+  end
+
   def increment(id) do
     Vault.State.update_progress(id, fn progress ->
       %{progress | current: progress.current + 1}
@@ -45,7 +59,7 @@ defmodule Vault.UI.Progress do
       Owl.ProgressBar.inc(id: id)
 
       if Vault.State.progress_finished?(id) do
-        Owl.LiveScreen.await_render()
+        set_detail(id, "")
       end
     end
 
@@ -81,20 +95,6 @@ defmodule Vault.UI.Progress do
         config: %{type: {:device, Owl.LiveScreen}},
         formatter: Logger.Formatter.new()
       })
-    else
-      :ok
-    end
-  end
-
-  def set_detail(id, text) do
-    if enabled?() && !test_env?() do
-      safe_text =
-        case text do
-          bin when is_binary(bin) -> String.slice(bin, 0, 200)
-          other -> to_string(other) |> String.slice(0, 200)
-        end
-
-      Owl.LiveScreen.update({:detail, id}, safe_text)
     else
       :ok
     end
