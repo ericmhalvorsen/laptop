@@ -1,7 +1,7 @@
 defmodule Vault.MixProject do
   use Mix.Project
 
-  @author "Eric M. Halvorsen"
+  @author "Eric Halvorsen"
   @version "0.1.0"
   @description """
     Vault is a tool for backing up and restoring macOS configurations and data.
@@ -35,7 +35,7 @@ defmodule Vault.MixProject do
   defp escript do
     [
       main_module: Vault.CLI,
-      name: ".vault-escript"
+      name: "bin/.vault-escript"
     ]
   end
 
