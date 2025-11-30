@@ -21,8 +21,7 @@ defmodule Vault.CLI do
           verbose: :boolean,
           dry_run: :boolean,
           help: :boolean,
-          git_only: :boolean,
-          vault_only: :boolean
+          only: :string
         ],
         aliases: [
           c: :config_path,
@@ -30,6 +29,20 @@ defmodule Vault.CLI do
           h: :help
         ]
       )
+
+    opts =
+      case Keyword.get(opts, :only) do
+        "git" ->
+          Progress.puts([Progress.tag("Only performing backup to git", :yellow)])
+          Keyword.merge(opts, git_only: true)
+
+        "vault" ->
+          Progress.puts([Progress.tag("Only performing backup to vault", :yellow)])
+          Keyword.merge(opts, vault_only: true)
+
+        _ ->
+          opts
+      end
 
     case {command_and_args, invalid, opts[:help]} do
       {_, _, true} -> :help

@@ -56,7 +56,7 @@ defmodule Vault.Commands.Save do
           step_name,
           Map.merge(step_config, %{dest: git_config.dest}),
           relative_root,
-          opts
+          Keyword.put(opts, :flatten_paths, true)
         )
       end)
     end
@@ -66,11 +66,10 @@ defmodule Vault.Commands.Save do
 
       config.vault.steps
       |> Enum.each(fn step ->
-        step_name = step[:name] || step.name
         step_config = step |> Map.new() |> Map.delete(:name)
 
         execute_step(
-          step_name,
+          step.name,
           Map.merge(step_config, %{dest: config.vault.dest}),
           relative_root,
           Keyword.put(opts, :exclude, excludes)
