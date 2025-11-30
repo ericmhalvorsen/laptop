@@ -52,6 +52,7 @@ defmodule Vault.MixProject do
     [
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
+      {:memoize, "~> 1.4"},
       {:owl, "~> 0.13"},
       {:ucwidth, "~> 0.2"},
       {:yaml_elixir, "~> 2.9"}

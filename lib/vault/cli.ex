@@ -16,12 +16,14 @@ defmodule Vault.CLI do
       OptionParser.parse(
         args,
         strict: [
+          config_path: :string,
           vault_path: :string,
           verbose: :boolean,
           dry_run: :boolean,
           help: :boolean
         ],
         aliases: [
+          c: :config_path,
           v: :vault_path,
           h: :help
         ]
@@ -74,6 +76,7 @@ defmodule Vault.CLI do
       Progress.tag("help", :green),
       "                  Show this help\n\n",
       Progress.tag("Options:\n", :yellow),
+      "  -c, --config-path PATH      Config file path, default config/vault.yaml\n",
       "  -v, --vault-path PATH       Vault directory path\n",
       "  --verbose                   Verbose output\n",
       "  --dry-run                   Dry run (no changes)\n",

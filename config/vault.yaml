@@ -1,0 +1,148 @@
+version: 1
+
+:git:
+  :dest: backup
+  :steps:
+    - brew
+    - dotfiles
+    - scripts
+
+:vault:
+  :dest: ~/VaultBackup
+
+  :steps:
+    - :name: brew
+      :label: "Brewfile"
+
+    - :name: sensitive
+      :label: "SSH Keys, GPG Keys, AWS Keys, Personal Creds"
+      :contents:
+        - .ssh
+        - .gnupg
+        - .aws
+        - .config/private
+
+    - :name: dotfiles
+      :contents:
+        - .bashrc
+        - .bash_profile
+        - .profile
+        - .zlogin
+        - .zprofile
+        - .zsh
+        - .zshrc
+
+    - :name: scripts
+      :contents:
+        - .local/bin/*
+
+    - :name: configdirs
+      :contents:
+        - .antigravity
+        - .claude
+        - .codeium
+        - .config
+        - .cursor
+        - .gemini
+        - .gitconfig
+        - .local
+        - .oh-my-zsh
+        - .opencode
+        - .promptuary
+        - .viminfo
+        - .vscode
+        - .warp
+        - .windsurf
+
+    - :name: fonts
+      :label: "Fonts"
+      :contents:
+        - Library/Fonts
+
+    - :name: histories
+      :label: "Shell Histories"
+      :contents:
+        - .*_history
+
+    - :name: homedirs
+      :label: "Home Directories"
+      :contents:
+        - Applications
+        - code
+        - Desktop
+        - Documents
+        - Downloads
+        - Movies
+        - Music
+        - Pictures
+        - Public
+
+    - :name: app_config
+      :label: "Application Support and Preferences"
+      :contents:
+        - "Library/Application Support"
+        - Library/Preferences
+
+    - :name: backup
+      :label: Everything else
+      :contents: ~/
+
+:defaults:
+  :relative_root: ~/
+  # Excludes are ignored if added to 'contents' for a given vault block
+  :exclude_patterns:
+    - "*.log"
+    - "*.pid"
+    - .DS_Store
+    - .GlobalPreferences
+    - .Trash
+    - .android
+    - .bun
+    - .bundle
+    - .cache
+    - .cups
+    - .dapr
+    - .eye
+    - .gem
+    - .gk
+    - .god
+    - .hex
+    - .hyper_plugins
+    - .lesshst
+    - .matplotlib
+    - .mix
+    - .mono
+    - .node_modules
+    - .npm
+    - .CFUserTextEncoding
+    - .nvm
+    - .ollama
+    - .pgadmin
+    - .pnpm-state
+    - .rustup
+    - .terraform.d
+    - .vim
+    - .viminfo
+    - .vscode
+    - .vscode-server
+    - .wget-hsts
+    - .yarn
+    - .zcompdump*
+    - .zsh_sessions
+    - AddressBook
+    - ByHost
+    - Cache
+    - CallHistoryDB
+    - CrashReporter
+    - FaceTime
+    - GPUCache
+    - Google/Chrome/GrShaderCache
+    - Google/Chrome/Safe Browsing
+    - MobileMeAccounts.plist
+    - ShaderCache
+    - Thumbs.db
+    - com.apple.
+    - networkservices.plist
+    - node_modules
+    - tmp*
+    - vendor

@@ -80,7 +80,22 @@ defmodule Vault.Utils.FileUtils do
     end
   end
 
-  def ensure_dir(path) do
+  def output_file(dest, lines, dry_run) do
+    if dry_run do
+      {:ok, :skipped}
+    else
+      content = Enum.join(lines, "\n") <> "\n"
+
+      case File.write(dest, content) do
+        :ok -> {:ok, length(lines)}
+        {:error, reason} -> {:error, "Failed to write #{dest}: #{reason}"}
+      end
+    end
+  end
+
+  def ensure_dir(_path, true), do: {:ok, "dry_run"}
+
+  def ensure_dir(path, _) do
     case File.mkdir_p(path) do
       :ok -> {:ok, path}
       {:error, reason} -> {:error, reason}
