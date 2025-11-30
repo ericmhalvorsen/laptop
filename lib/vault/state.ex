@@ -26,11 +26,11 @@ defmodule Vault.State do
     Agent.start_link(fn -> init end, name: __MODULE__)
   end
 
-  defp get(val) do
+  def get(val) do
     Agent.get(__MODULE__, fn state -> state[val] end)
   end
 
-  defp update(update_func) do
+  def update(update_func) do
     Agent.update(__MODULE__, update_func)
   end
 end

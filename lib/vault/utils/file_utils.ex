@@ -3,52 +3,6 @@ defmodule Vault.Utils.FileUtils do
   Utility functions for file operations in Vault.
   """
 
-  def copy_file(source, dest) do
-    with true <- File.exists?(source) || {:error, :source_not_found},
-         :ok <- File.mkdir_p(Path.dirname(dest)),
-         :ok <- File.cp(source, dest) do
-      {:ok, dest}
-    else
-      {:error, reason} -> {:error, reason}
-      false -> {:error, :source_not_found}
-    end
-  end
-
-  def copy_files(source_dir, dest_dir, files) when is_list(files) do
-    results =
-      Enum.map(files, fn file ->
-        source = Path.join(source_dir, file)
-        dest = Path.join(dest_dir, file)
-        copy_file(source, dest)
-      end)
-
-    errors = Enum.filter(results, &match?({:error, _}, &1))
-
-    if Enum.empty?(errors) do
-      {:ok, length(results)}
-    else
-      {:error, {:failed_copies, errors}}
-    end
-  end
-
-  def list_dotfiles(dir) do
-    case File.ls(dir) do
-      {:ok, files} ->
-        dotfiles =
-          files
-          |> Enum.filter(&dotfile?/1)
-          |> Enum.sort()
-
-        {:ok, dotfiles}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  def dotfile?("." <> _rest), do: true
-  def dotfile?(_), do: false
-
   def list_files_recursive(dir, opts \\ []) do
     exclude_patterns = Keyword.get(opts, :exclude, [])
 
@@ -99,6 +53,44 @@ defmodule Vault.Utils.FileUtils do
     case File.mkdir_p(path) do
       :ok -> {:ok, path}
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def expand_contents(root, contents) when is_binary(root) and is_list(contents) do
+    expanded_root = Path.expand(root)
+
+    contents
+    |> Enum.flat_map(fn entry ->
+      case String.contains?(entry, "*") do
+        true ->
+          pattern =
+            if Path.type(entry) == :absolute do
+              entry
+            else
+              Path.join(expanded_root, entry)
+            end
+
+          pattern
+          |> Path.wildcard()
+          |> Enum.map(&Path.relative_to(&1, expanded_root))
+
+        false ->
+          [normalize_relative(entry)]
+      end
+    end)
+    |> Enum.uniq()
+  end
+
+  defp normalize_relative(path) do
+    cond do
+      Path.type(path) == :absolute ->
+        path
+
+      String.starts_with?(path, "./") ->
+        String.trim_leading(path, "./")
+
+      true ->
+        path
     end
   end
 

@@ -125,7 +125,7 @@ defmodule Vault.Commands.Restore do
           " would restore .zsh_history"
         ])
       else
-        Vault.Sync.copy_file(zsh_history_src, zsh_history_dest)
+        Vault.Sync.copy_tree(zsh_history_src, zsh_history_dest)
         Progress.puts(["  ", Progress.tag("✓", :green), " Restored .zsh_history"])
       end
     end
@@ -138,7 +138,7 @@ defmodule Vault.Commands.Restore do
       if dry_run do
         Progress.puts(["  ", Progress.tag("dry-run:", :light_black), " would restore mise.toml"])
       else
-        Vault.Sync.copy_file(mise_toml_src, mise_toml_dest)
+        Vault.Sync.copy_tree(mise_toml_src, mise_toml_dest)
         Progress.puts(["  ", Progress.tag("✓", :green), " Restored mise.toml"])
       end
     end
@@ -205,7 +205,7 @@ defmodule Vault.Commands.Restore do
             Enum.each(files, fn plist ->
               src_file = Path.join(src, plist)
               dest_file = Path.join(dest, plist)
-              Vault.Sync.copy_file(src_file, dest_file)
+              Vault.Sync.copy_tree(src_file, dest_file)
             end)
 
             Progress.puts([

@@ -54,29 +54,17 @@ defmodule Vault.UI.Progress do
 
   def puts(iodata) do
     cond do
-      !enabled?() ->
-        :ok
-
-      test_env?() ->
+      !enabled?() || test_env?() ->
         IO.puts(iodata)
 
       true ->
-        try do
-          Owl.IO.puts(iodata)
-        rescue
-          ArgumentError ->
-            # Fallback if LiveScreen/formatter crashes on large iodata
-            IO.puts(iodata)
-        end
+        Owl.IO.puts(iodata)
     end
   end
 
   def tag(text, color) do
     cond do
-      !enabled?() ->
-        text
-
-      test_env?() ->
+      !enabled?() || test_env?() ->
         text
 
       true ->
@@ -106,11 +94,7 @@ defmodule Vault.UI.Progress do
           other -> to_string(other) |> String.slice(0, 200)
         end
 
-      try do
-        Owl.LiveScreen.update({:detail, id}, safe_text)
-      rescue
-        ArgumentError -> :ok
-      end
+      Owl.LiveScreen.update({:detail, id}, safe_text)
     else
       :ok
     end
