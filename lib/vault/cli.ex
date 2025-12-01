@@ -21,10 +21,12 @@ defmodule Vault.CLI do
           verbose: :boolean,
           dry_run: :boolean,
           help: :boolean,
-          only: :string
+          only: :string,
+          dev: :boolean
         ],
         aliases: [
           c: :config_path,
+          d: :dev,
           v: :vault_path,
           h: :help
         ]

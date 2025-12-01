@@ -74,16 +74,11 @@ defmodule Vault.Utils.FileUtils do
   end
 
   @spec expand_contents(binary(), nil | binary() | maybe_improper_list()) :: list()
-  def expand_contents(root, contents) when is_binary(root) do
-    contents
-    |> normalize_contents()
-    |> do_expand_contents(root)
-  end
-
-  defp do_expand_contents(contents_list, root) do
+  def expand_contents(contents, root) when is_binary(root) do
     expanded_root = expand_path(root)
 
-    contents_list
+    contents
+    |> normalize_contents()
     |> Enum.flat_map(fn entry ->
       case String.contains?(entry, "*") do
         true ->
@@ -126,7 +121,6 @@ defmodule Vault.Utils.FileUtils do
     end
   end
 
-  @spec expand_path(nil | binary()) :: nil | binary()
   def expand_path(path), do: expand_path(path, File.cwd!())
 
   defp normalize_contents(nil), do: []
