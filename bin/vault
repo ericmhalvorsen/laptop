@@ -95,7 +95,6 @@ fi
 
 if [ "$RELOAD" = true ]; then
     echo -e "${YELLOW}==> Rebuilding vault (--dev mode)${NC}"
-    cd "$SCRIPT_DIR"
     mise exec -- mix escript.build
     chmod +x "$VAULT_ESCRIPT"
     echo ""

@@ -1,0 +1,13 @@
+.local/bin/2048
+.local/bin/claude-wrapper
+.local/bin/ecs-ssh
+.local/bin/gconfig
+.local/bin/gemexplore
+.local/bin/ghostfont
+.local/bin/git-open
+.local/bin/minesweeper
+.local/bin/murder
+.local/bin/pokeget
+.local/bin/viconfig
+.local/bin/wordle
+.local/bin/zshconfig

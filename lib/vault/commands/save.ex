@@ -43,17 +43,13 @@ defmodule Vault.Commands.Save do
 
     excludes = config.defaults.exclude_patterns
 
-    git_only? = Keyword.get(opts, :git_only, false)
-    vault_only? = Keyword.get(opts, :vault_only, false)
-
-    if !vault_only? do
+    if !Keyword.get(opts, :vault_only, false) do
       git_config.steps
       |> Enum.each(fn step ->
-        step_name = step[:name] || step.name
         step_config = step |> Map.new() |> Map.delete(:name)
 
         execute_step(
-          step_name,
+          step.name,
           Map.merge(step_config, %{dest: git_config.dest}),
           relative_root,
           Keyword.put(opts, :flatten_paths, true)
@@ -61,7 +57,7 @@ defmodule Vault.Commands.Save do
       end)
     end
 
-    if !git_only? do
+    if !Keyword.get(opts, :git_only, false) do
       State.update(fn state -> Map.put(state, :backup_tracker, MapSet.new()) end)
 
       config.vault.steps
@@ -70,7 +66,7 @@ defmodule Vault.Commands.Save do
 
         execute_step(
           step.name,
-          Map.merge(step_config, %{dest: config.vault.dest}),
+          %{step_config | dest: config.vault.dest},
           relative_root,
           Keyword.put(opts, :exclude, excludes)
         )
@@ -101,12 +97,10 @@ defmodule Vault.Commands.Save do
           Backup.homebrew(dest_path, opts)
 
         _ ->
-          rel_paths = FileUtils.expand_contents(source_path, config.contents || [])
-
           Backup.backup(
             source_path,
             Path.join(dest_path, step),
-            rel_paths,
+            config.contents || [],
             opts || []
           )
       end

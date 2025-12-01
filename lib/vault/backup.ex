@@ -45,48 +45,47 @@ defmodule Vault.Backup do
     dry_run = Keyword.get(opts, :dry_run, false)
     base_exclude = Keyword.get(opts, :exclude, [])
     tracker = State.get(:backup_tracker) || MapSet.new()
-    flatten_paths? = Keyword.get(opts, :flatten_paths, false)
+    # flatten_paths? = Keyword.get(opts, :flatten_paths, false)
 
-    dirs = dirs || []
+    # This is expanding * too early
+    dirs = FileUtils.expand_contents(dirs || [], source_dir)
+    :logger.info(dirs)
 
-    {updated_tracker, results} =
-      Enum.reduce(dirs, {tracker, []}, fn path, {tracker_acc, acc} ->
-        source_path = Path.join(source_dir, path)
-        relative_dest = if flatten_paths?, do: Path.basename(path), else: path
-        dest_path = Path.join(vault_path, relative_dest)
+    # {updated_tracker, results} =
+    #   Enum.reduce(dirs, {tracker, []}, fn path, {tracker_acc, acc} ->
+    # source_path = Path.join(source_dir, path)
+    # relative_dest = if flatten_paths?, do: Path.basename(path), else: path
+    # dest_path = Path.join(vault_path, relative_dest)
 
-        progress_id = String.to_atom("backup_" <> (path |> String.replace("/", "_")))
+    progress_id = String.to_atom("backup_" <> (vault_path |> String.replace("/", "_")))
 
-        exclude_patterns = base_exclude ++ tracker_excludes_for_dir(path, tracker_acc)
+    # ++ tracker_excludes_for_dir(path, tracker)
+    exclude_patterns = base_exclude
 
-        unless dry_run do
-          File.mkdir_p!(Path.dirname(dest_path))
-          Progress.puts(["  ", Path.basename(source_path), " ", Progress.tag("(Done)", :green)])
-          :ok
+    unless dry_run do
+      File.mkdir_p!(Path.dirname(vault_path))
 
-          Sync.copy_tree(source_path, dest_path,
-            exclude: exclude_patterns,
-            delete: File.dir?(source_path),
-            progress_id: progress_id
-          )
-        end
+      Sync.copy_tree(source_dir, vault_path,
+        dirs: dirs,
+        exclude: exclude_patterns,
+        progress_id: progress_id
+      )
+    end
 
-        {MapSet.put(tracker_acc, path), [{:backed_up, path} | acc]}
-      end)
-
-    backed_up = collect_results(results, :backed_up)
-    skipped = collect_results(results, :skipped)
+    dirs
+    |> Enum.each(fn dir -> MapSet.put(tracker, dir) end)
 
     {:ok, total_size} = FileUtils.file_size(vault_path)
 
-    State.update(fn state -> Map.put(state, :backup_tracker, updated_tracker) end)
+    State.update(fn state -> Map.put(state, :backup_tracker, tracker) end)
+
+    # :logger.error("TRACKER: #{tracker}")
 
     {:ok,
      %{
-       summary: [Enum.join(backed_up, "\n")],
+       summary: [Enum.join(dirs, "\n")],
        stats: %{total_size: total_size},
-       backed_up: backed_up,
-       skipped: skipped
+       backed_up: dirs
      }}
   end
 
@@ -121,10 +120,6 @@ defmodule Vault.Backup do
     using_mock = Keyword.has_key?(opts, :cmd)
     dest_path = fn file -> Path.join([dest_dir, "brew", file]) end
     brewfile_path = dest_path.("Brewfile")
-
-    if dry_run do
-      :logger.error("DRY_RUN")
-    end
 
     with :ok <- if(using_mock, do: :ok, else: ensure_homebrew_installed()),
          {:ok, formulas} <- brew(["list", "--formula"], dry_run),
