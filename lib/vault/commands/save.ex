@@ -66,7 +66,7 @@ defmodule Vault.Commands.Save do
 
         execute_step(
           step.name,
-          %{step_config | dest: config.vault.dest},
+          Map.put(step_config, :dest, config.vault.dest),
           relative_root,
           Keyword.put(opts, :exclude, excludes)
         )
@@ -110,10 +110,9 @@ defmodule Vault.Commands.Save do
         Progress.puts([
           "  ",
           Progress.tag("✓", :green),
-          " Created backup (",
-          Progress.tag(FileUtils.format_size(result.stats.total_size), :yellow),
-          "): \n",
-          Progress.tag("#{result.summary}", :cyan)
+          Progress.tag("   #{result.stats.count} entries transferred (", :blue),
+          Progress.tag(["target ", FileUtils.format_size(result.stats.total_size)], :yellow),
+          Progress.tag(") \n", :blue)
         ])
 
       {:error, reason} ->
@@ -123,5 +122,8 @@ defmodule Vault.Commands.Save do
           " Failed: #{reason}"
         ])
     end
+
+    # Yeah thats a good idea dump it
+    Owl.LiveScreen.flush()
   end
 end

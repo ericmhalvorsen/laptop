@@ -22,8 +22,6 @@ defmodule Vault.UI.Progress do
   def start_progress(id, label, total) do
     Vault.State.update_progress(id, fn _ -> %{total: total, current: 0} end)
 
-    :logger.info("TOTAL for #{id}: #{total}")
-
     if enabled?() && !test_env?() && total > 0 do
       Owl.ProgressBar.start(
         id: id,
@@ -71,6 +69,16 @@ defmodule Vault.UI.Progress do
     :ok
   end
 
+  def tag(text, color) do
+    cond do
+      !enabled?() || test_env?() ->
+        text
+
+      true ->
+        Owl.Data.tag(text, color)
+    end
+  end
+
   def puts(iodata) do
     cond do
       !enabled?() || test_env?() ->
@@ -81,14 +89,24 @@ defmodule Vault.UI.Progress do
     end
   end
 
-  def tag(text, color) do
-    cond do
-      !enabled?() || test_env?() ->
-        text
+  def info(messages) do
+    [messages] |> List.flatten() |> tag(:cyan) |> puts
+  end
 
-      true ->
-        Owl.Data.tag(text, color)
-    end
+  def debug(messages) do
+    [messages]
+    |> List.flatten()
+    |> Enum.map(fn m -> "   ---- DEBUG ---- #{m}" end)
+    |> tag([:magenta, :faint])
+    |> puts()
+  end
+
+  def warn(messages) do
+    [messages] |> List.flatten() |> tag(:yellow) |> puts
+  end
+
+  def error(messages) do
+    [messages] |> List.flatten() |> tag(:red) |> puts
   end
 
   def setup_logger do

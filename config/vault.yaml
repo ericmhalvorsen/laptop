@@ -4,8 +4,8 @@ version: 1
   :dest: backup
   :steps:
     # - brew
-    # - dotfiles
     - scripts
+    - dotfiles
 
 :vault:
   :dest: ~/VaultBackup
@@ -22,6 +22,10 @@ version: 1
         - .aws
         - .config/private
 
+    - :name: scripts
+      :contents:
+        - .local/bin/*
+
     - :name: dotfiles
       :contents:
         - .bashrc
@@ -29,12 +33,8 @@ version: 1
         - .profile
         - .zlogin
         - .zprofile
-        - .zsh
+        - .zsh/
         - .zshrc
-
-    - :name: scripts
-      :contents:
-        - .local/bin/*
 
     - :name: configdirs
       :contents:

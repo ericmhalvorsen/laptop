@@ -56,6 +56,16 @@ defmodule Vault.Utils.FileUtils do
     end
   end
 
+  @spec ensure_dir(any()) ::
+          {:error, atom()}
+          | {:ok,
+             binary()
+             | maybe_improper_list(
+                 binary() | maybe_improper_list(any(), binary() | []) | char(),
+                 binary() | []
+               )}
+  def ensure_dir(path), do: ensure_dir(path, false)
+
   @spec ensure_dir(any(), any()) ::
           {:error, atom()}
           | {:ok,
@@ -94,11 +104,14 @@ defmodule Vault.Utils.FileUtils do
           |> Enum.map(&Path.relative_to(&1, expanded_root))
 
         false ->
-          expanded_entry = expand_path(entry, expanded_root)
-          [Path.relative_to(expanded_entry, expanded_root)]
+          entry
+          |> expand_path(expanded_root)
+          |> Path.wildcard()
+          |> Enum.map(&Path.relative_to(&1, expanded_root))
       end
     end)
     |> Enum.uniq()
+    |> Enum.map(&append_slash_if_dir(&1, expanded_root))
   end
 
   @spec expand_path(nil | binary(), nil | binary()) :: nil | binary()
@@ -154,5 +167,14 @@ defmodule Vault.Utils.FileUtils do
     Enum.any?(patterns, fn pattern ->
       String.contains?(entry, pattern) or entry == pattern
     end)
+  end
+
+  defp append_slash_if_dir(relative_path, root) do
+    full_path = Path.join(root, relative_path)
+
+    case File.dir?(full_path) do
+      true -> relative_path <> "/"
+      false -> relative_path
+    end
   end
 end
