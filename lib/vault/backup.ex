@@ -1,28 +1,14 @@
 defmodule Vault.Backup do
-  @moduledoc """
-  Backs up home directories (Documents, Downloads, Pictures, Desktop) to vault.
-
-  Uses File.cp_r for recursive copying with exclusion patterns.
-  Files are saved to vault/home/ (NOT committed to git).
-  """
-
   use Memoize
 
+  alias Vault.Config
   alias Vault.UI.Progress
   alias Vault.Sync
   alias Vault.Utils.FileUtils
   alias Vault.State
 
-  @spec backup(
-          any(),
-          binary()
-          | maybe_improper_list(
-              binary() | maybe_improper_list(any(), binary() | []) | char(),
-              binary() | []
-            )
-        ) :: {:ok, %{backed_up: list(), skipped: list(), stats: map(), summary: [...]}}
   @doc """
-  Backs up to the destination dir
+  Back it up joe
 
   ## Parameters
 
@@ -41,50 +27,48 @@ defmodule Vault.Backup do
    * `{:error, reason}` - Failure with reason
 
   """
-  def backup(source_dir, vault_path, dirs \\ nil, opts \\ []) do
+  def backup(source_dir, dest, dirs \\ nil, opts \\ []) do
     dry_run = Keyword.get(opts, :dry_run, false)
     base_exclude = Keyword.get(opts, :exclude, [])
+    verbose = Keyword.get(opts, :verbose)
     tracker = State.get(:backup_tracker) || MapSet.new()
-    # flatten_paths? = Keyword.get(opts, :flatten_paths, false)
 
-    # This is expanding * too early
     dirs = FileUtils.expand_contents(dirs || [], source_dir)
-    :logger.info(dirs)
+    progress_id = String.to_atom("backup_" <> (dest |> String.replace("/", "_")))
 
-    # {updated_tracker, results} =
-    #   Enum.reduce(dirs, {tracker, []}, fn path, {tracker_acc, acc} ->
-    # source_path = Path.join(source_dir, path)
-    # relative_dest = if flatten_paths?, do: Path.basename(path), else: path
-    # dest_path = Path.join(vault_path, relative_dest)
+    # Build excludes from all tracked directories
+    tracker_excludes =
+      dirs
+      |> Enum.flat_map(fn dir -> tracker_excludes_for_dir(dir, tracker) end)
+      |> Kernel.++(Config.default_excludes())
+      |> Enum.uniq()
 
-    progress_id = String.to_atom("backup_" <> (vault_path |> String.replace("/", "_")))
+    exclude_patterns = base_exclude ++ tracker_excludes
 
-    # ++ tracker_excludes_for_dir(path, tracker)
-    exclude_patterns = base_exclude
+    if !dry_run, do: File.mkdir_p!(Path.dirname(dest))
 
-    unless dry_run do
-      File.mkdir_p!(Path.dirname(vault_path))
-
-      Sync.copy_tree(source_dir, vault_path,
+    {:ok, total_size, count} =
+      Sync.copy_tree(source_dir, dest,
         dirs: dirs,
         exclude: exclude_patterns,
-        progress_id: progress_id
+        progress_id: progress_id,
+        verbose: verbose,
+        dry_run: dry_run
       )
-    end
 
-    dirs
-    |> Enum.each(fn dir -> MapSet.put(tracker, dir) end)
+    updated_tracker =
+      Enum.reduce(dirs, tracker, fn dir, acc -> MapSet.put(acc, dir) end)
 
-    {:ok, total_size} = FileUtils.file_size(vault_path)
+    State.update(fn state -> Map.put(state, :backup_tracker, updated_tracker) end)
 
-    State.update(fn state -> Map.put(state, :backup_tracker, tracker) end)
-
-    # :logger.error("TRACKER: #{tracker}")
+    if verbose,
+      do:
+        Progress.debug("Tracker: #{updated_tracker |> MapSet.to_list() |> Enum.count()} entries")
 
     {:ok,
      %{
        summary: [Enum.join(dirs, "\n")],
-       stats: %{total_size: total_size},
+       stats: %{total_size: total_size, count: count},
        backed_up: dirs
      }}
   end
@@ -157,12 +141,6 @@ defmodule Vault.Backup do
     else
       {:error, reason} -> {:error, reason}
     end
-  end
-
-  defp collect_results(results, type) do
-    results
-    |> Enum.filter(fn {result_type, _dir} -> result_type == type end)
-    |> Enum.map(fn {_type, dir} -> dir end)
   end
 
   defp tracker_excludes_for_dir(dir, tracker) do
