@@ -43,34 +43,43 @@ defmodule Vault.Backup do
       |> Kernel.++(Config.default_excludes())
       |> Enum.uniq()
 
+    if verbose do
+      Progress.debug("Dirs to backup: #{inspect(dirs)}")
+      Progress.debug("Tracker: #{inspect(MapSet.to_list(tracker))}")
+      Progress.debug("Tracker excludes: #{inspect(tracker_excludes -- Config.default_excludes())}")
+    end
+
     exclude_patterns = base_exclude ++ tracker_excludes
 
     if !dry_run, do: File.mkdir_p!(Path.dirname(dest))
 
-    {:ok, total_size, count} =
-      Sync.copy_tree(source_dir, dest,
-        dirs: dirs,
-        exclude: exclude_patterns,
-        progress_id: progress_id,
-        verbose: verbose,
-        dry_run: dry_run
-      )
+    case Sync.copy_tree(source_dir, dest,
+           dirs: dirs,
+           exclude: exclude_patterns,
+           progress_id: progress_id,
+           verbose: verbose,
+           dry_run: dry_run
+         ) do
+      {:ok, total_size, count} ->
+        updated_tracker =
+          Enum.reduce(dirs, tracker, fn dir, acc -> MapSet.put(acc, dir) end)
 
-    updated_tracker =
-      Enum.reduce(dirs, tracker, fn dir, acc -> MapSet.put(acc, dir) end)
+        State.update(fn state -> Map.put(state, :backup_tracker, updated_tracker) end)
 
-    State.update(fn state -> Map.put(state, :backup_tracker, updated_tracker) end)
+        if verbose,
+          do:
+            Progress.debug("Tracker: #{updated_tracker |> MapSet.to_list() |> Enum.count()} entries")
 
-    if verbose,
-      do:
-        Progress.debug("Tracker: #{updated_tracker |> MapSet.to_list() |> Enum.count()} entries")
+        {:ok,
+         %{
+           summary: [Enum.join(dirs, "\n")],
+           stats: %{total_size: total_size, count: count},
+           backed_up: dirs
+         }}
 
-    {:ok,
-     %{
-       summary: [Enum.join(dirs, "\n")],
-       stats: %{total_size: total_size, count: count},
-       backed_up: dirs
-     }}
+      {:error, _, _} ->
+        {:error, "rsync failed"}
+    end
   end
 
   @spec homebrew(any()) ::
@@ -125,6 +134,7 @@ defmodule Vault.Backup do
         formulas: length(formulas),
         casks: length(casks),
         taps: length(taps),
+        count: length(taps) + length(casks) + length(formulas),
         total_size: size
       }
 
@@ -144,11 +154,26 @@ defmodule Vault.Backup do
   end
 
   defp tracker_excludes_for_dir(dir, tracker) do
-    prefix = dir <> "/"
+    # Normalize: remove trailing slash from dir for comparison
+    normalized_dir = String.trim_trailing(dir, "/")
 
-    tracker
-    |> Enum.filter(fn path -> String.starts_with?(path, prefix) end)
-    |> Enum.map(fn path -> String.trim_leading(path, prefix) end)
+    # Special case: if dir is empty or just a dot, match all top-level tracker entries
+    if normalized_dir == "" or normalized_dir == "." do
+      tracker
+      |> Enum.map(&String.trim_trailing(&1, "/"))
+    else
+      prefix = normalized_dir <> "/"
+
+      tracker
+      |> Enum.filter(fn path ->
+        normalized_path = String.trim_trailing(path, "/")
+        # Check if the tracked path is a child of the current dir
+        normalized_path != normalized_dir and String.starts_with?(normalized_path, prefix)
+      end)
+      |> Enum.map(fn path ->
+        String.trim_leading(String.trim_trailing(path, "/"), prefix)
+      end)
+    end
   end
 
   defp ensure_homebrew_installed do

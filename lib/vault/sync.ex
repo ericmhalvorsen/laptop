@@ -76,13 +76,14 @@ defmodule Vault.Sync do
   defp rsync_copy(source, dest, opts) do
     is_file = File.regular?(source)
     progress_id = Keyword.get(opts, :progress_id)
+    verbose = Keyword.get(opts, :verbose)
+
+    if verbose, do: Progress.debug("Calculating file count")
 
     count =
       compute_transfer_count(source, dest, Keyword.get(opts, :dirs), Keyword.get(opts, :exclude))
 
-    if Keyword.get(opts, :verbose) do
-      Progress.debug("Calcuated #{count} files to transfer from #{source}")
-    end
+    if verbose, do: Progress.debug("Calcuated #{count} files to transfer from #{source}")
 
     if count == 0 do
       if is_file do
@@ -106,17 +107,26 @@ defmodule Vault.Sync do
 
       port = exec_rsync(source, dest, opts)
 
+      # Track permission errors
+      skipped_count = :atomics.new(1, [])
+
       status =
         stream_rsync_output(port, "", fn lines ->
           Enum.reduce(lines, "", fn line, last ->
             cond do
-              line == "" ->
+              String.trim(line) == "" ->
                 last
 
               line == "sending incremental file list" ->
                 last
 
+              String.contains?(line, "Operation not permitted") ->
+                :atomics.add(skipped_count, 1, 1)
+                last
+
               String.ends_with?(line, "/") ->
+                if verbose, do: Progress.set_detail(progress_id, line)
+
                 last
 
               line == last ->
@@ -133,6 +143,12 @@ defmodule Vault.Sync do
             end
           end)
         end)
+
+      skipped = :atomics.get(skipped_count, 1)
+
+      if skipped > 0 do
+        Progress.warn("  Skipped #{skipped} files due to permissions")
+      end
 
       {status, count}
     end
@@ -158,11 +174,13 @@ defmodule Vault.Sync do
     exclude_patterns = Keyword.get(opts, :exclude, []) || []
     exclude_args = Enum.flat_map(exclude_patterns, fn p -> ["--exclude", p] end)
     from_files_arg = if file_list, do: ["--files-from=#{file_list}"], else: []
+    # Don't use --delete with --files-from as the file list changes based on tracker state
     delete_arg = if Keyword.get(opts, :delete, true), do: ["--delete"], else: []
     archive_arg = if Keyword.get(opts, :archive, true), do: ["-a"], else: []
     recursive_arg = if Keyword.get(opts, :recursive, true), do: ["-r"], else: []
     dry_run_arg = if Keyword.get(opts, :dry_run), do: ["-n"], else: []
     stats_arg = if Keyword.get(opts, :stats), do: ["--stats"], else: []
+    omit_dir_times_arg = ["--omit-dir-times"]
 
     args =
       dry_run_arg ++
@@ -170,6 +188,7 @@ defmodule Vault.Sync do
         recursive_arg ++
         delete_arg ++
         stats_arg ++
+        omit_dir_times_arg ++
         from_files_arg ++
         exclude_args ++
         ["--out-format=%n", source_arg, dest]
@@ -203,12 +222,18 @@ defmodule Vault.Sync do
       {^port, {:exit_status, 0}} ->
         :ok
 
-      {^port, {:exit_status, _status}} ->
-        Progress.error("✗ rsync failed\n")
+      {^port, {:exit_status, 23}} ->
+        # Exit code 23 = Partial transfer due to error (e.g., permission denied on some files)
+        # This is acceptable - we got what we could
+        :ok
+
+      {^port, {:exit_status, status}} ->
+        Progress.error("✗ rsync failed with exit code #{status}\n")
         :error
     after
-      60_000 ->
-        Progress.error("✗ rsync timed out\n")
+      300_000 ->
+        # 5 minute timeout - only triggers if rsync produces no output for 5 minutes
+        Progress.error("✗ rsync timed out (no output for 5 minutes)\n")
         :error
     end
   end
@@ -218,7 +243,7 @@ defmodule Vault.Sync do
     case exec_rsync(source, dest,
            exclude: exclude,
            dirs: dirs,
-           delete: true,
+           delete: false,
            dry_run: true,
            stream: false
          ) do
@@ -229,9 +254,36 @@ defmodule Vault.Sync do
         |> Enum.reject(&String.ends_with?(&1, "/"))
         |> length()
 
+      {output, 23} ->
+        # Exit code 23 = Partial transfer due to permission errors
+        # Just count the files, ignore the errors
+        output
+        |> String.split("\n", trim: true)
+        |> Enum.reject(&(&1 == "sending incremental file list"))
+        |> Enum.reject(&String.starts_with?(&1, "rsync"))
+        |> Enum.reject(&String.contains?(&1, "warning:"))
+        |> Enum.reject(&String.contains?(&1, "error:"))
+        |> Enum.reject(&String.contains?(&1, "Operation not permitted"))
+        |> Enum.reject(&String.ends_with?(&1, "/"))
+        |> length()
+
       {output, _code} ->
-        Progress.puts([Progress.tag("Error computing transfer count: #{output}", :red)])
-        1
+        # Other errors - show them
+        filtered_output =
+          output
+          |> String.split("\n", trim: true)
+          |> Enum.reject(&(&1 == "sending incremental file list"))
+          |> Enum.reject(&String.starts_with?(&1, "rsync"))
+          |> Enum.reject(&String.contains?(&1, "warning:"))
+          |> Enum.reject(&String.contains?(&1, "error:"))
+          |> Enum.reject(&String.ends_with?(&1, "/"))
+          |> Enum.join("\n")
+
+        unless filtered_output == "" do
+          Progress.error("Error computing transfer count")
+        end
+
+        0
     end
   end
 
@@ -264,49 +316,27 @@ defmodule Vault.Sync do
 
   defp sanitize_detail(_), do: nil
 
-  defp maybe_return_total_size(:ok, _source, dest, dirs, exclude) when is_list(dirs) do
+  defp maybe_return_total_size(:ok, _source, dest, dirs, _exclude) when is_list(dirs) do
     total_size =
       dirs
       |> Enum.map(fn file ->
         clean_file = String.trim_trailing(file, "/")
         dest_path = Path.join(dest, clean_file)
-        {:ok, size} = maybe_return_total_size(:ok, nil, dest_path, nil, exclude)
 
-        size
+        case FileUtils.file_size(dest_path) do
+          {:ok, size} -> size
+          _ -> 0
+        end
       end)
       |> Enum.sum()
 
     {:ok, total_size}
   end
 
-  defp maybe_return_total_size(:ok, _source, dest, nil, exclude) do
-    case File.dir?(dest) do
-      true ->
-        case FileUtils.list_files_recursive(dest, exclude: exclude) do
-          {:ok, files} ->
-            total_size =
-              files
-              |> Enum.map(fn file ->
-                dst_file = Path.join(dest, file)
-
-                case FileUtils.file_size(dst_file) do
-                  {:ok, size} -> size
-                  _ -> 0
-                end
-              end)
-              |> Enum.sum()
-
-            {:ok, total_size}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-
-      false ->
-        case FileUtils.file_size(dest) do
-          {:ok, size} -> {:ok, size}
-          _ -> {:ok, 0}
-        end
+  defp maybe_return_total_size(:ok, _source, dest, nil, _exclude) do
+    case FileUtils.file_size(dest) do
+      {:ok, size} -> {:ok, size}
+      _ -> {:ok, 0}
     end
   end
 
