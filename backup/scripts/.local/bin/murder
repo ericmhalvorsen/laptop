@@ -1,11 +1,23 @@
 #!/bin/bash
 
-matching=$(ps -ef | grep "$1" | grep -v grep | grep -v "murder $1")
-if [ -n "$matching" ]; then
-  echo "Killing processes:"
-  echo "$matching" | awk '{printf "  %s (%s)\n", $2, $8}'
-  processes=$(echo "$matching" | awk "{print \$2}")
-  echo "$processes" | xargs kill -9 2>/dev/null && echo "Done." || echo "Done (some processes already terminated)."
+if [ $# -eq 0 ]; then
+  echo "Usage: murder <process_name> [process_name2] ..."
+  exit 1
+fi
+
+all_pids=""
+for pattern in "$@"; do
+  matching=$(ps -ef | grep "$pattern" | grep -v grep | grep -v "murder")
+  if [ -n "$matching" ]; then
+    echo "Found processes matching '$pattern':"
+    echo "$matching" | awk '{printf "  %s (%s)\n", $2, $8}'
+    pids=$(echo "$matching" | awk "{print \$2}")
+    all_pids="$all_pids $pids"
+  fi
+done
+
+if [ -n "$all_pids" ]; then
+  echo "$all_pids" | xargs kill -9 2>/dev/null && echo "Done." || echo "Done (some processes already terminated)."
 else
-  echo "No processes matching '$1' found."
+  echo "No matching processes found."
 fi

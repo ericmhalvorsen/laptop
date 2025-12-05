@@ -33,4 +33,10 @@ defmodule Vault.State do
   def update(update_func) do
     Agent.update(__MODULE__, update_func)
   end
+
+  def reset do
+    if Process.whereis(__MODULE__) do
+      Agent.update(__MODULE__, fn _ -> %{} end)
+    end
+  end
 end

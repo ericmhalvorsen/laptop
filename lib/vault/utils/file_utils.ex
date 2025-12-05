@@ -149,8 +149,27 @@ defmodule Vault.Utils.FileUtils do
         ) :: {:error, atom()} | {:ok, :undefined | non_neg_integer()}
   def file_size(path) do
     case File.stat(path) do
-      {:ok, %{size: size}} -> {:ok, size}
-      {:error, reason} -> {:error, reason}
+      {:ok, %{type: :directory}} ->
+        # For directories, use du which is much faster than recursive traversal
+        case System.cmd("du", ["-sk", path], stderr_to_stdout: true) do
+          {output, 0} ->
+            size_kb =
+              output
+              |> String.split("\t")
+              |> List.first()
+              |> String.to_integer()
+
+            {:ok, size_kb * 1024}
+
+          _ ->
+            {:ok, 0}
+        end
+
+      {:ok, %{size: size}} ->
+        {:ok, size}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 

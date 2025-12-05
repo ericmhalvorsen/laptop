@@ -33,7 +33,7 @@ version: 1
         - .profile
         - .zlogin
         - .zprofile
-        - .zsh/
+        - .zsh
         - .zshrc
 
     - :name: configdirs
@@ -94,6 +94,7 @@ version: 1
     - "*.log"
     - "*.pid"
     - .DS_Store
+    - VaultBackup
     - .GlobalPreferences
     - .Trash
     - .android
@@ -121,27 +122,21 @@ version: 1
     - .pnpm-state
     - .rustup
     - .terraform.d
-    - .vim
-    - .viminfo
-    - .vscode
-    - .vscode-server
     - .wget-hsts
     - .yarn
     - .zcompdump*
     - .zsh_sessions
-    - AddressBook
     - ByHost
     - Cache
-    - CallHistoryDB
     - CrashReporter
-    - FaceTime
     - GPUCache
     - Google/Chrome/GrShaderCache
     - Google/Chrome/Safe Browsing
     - MobileMeAccounts.plist
     - ShaderCache
     - Thumbs.db
-    - com.apple.
+    - com.apple.*
+    - com.docker.docker
     - networkservices.plist
     - node_modules
     - tmp*

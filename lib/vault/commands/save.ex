@@ -124,6 +124,6 @@ defmodule Vault.Commands.Save do
     end
 
     # Yeah thats a good idea dump it
-    Owl.LiveScreen.flush()
+    if Process.whereis(Owl.LiveScreen), do: Owl.LiveScreen.flush()
   end
 end
