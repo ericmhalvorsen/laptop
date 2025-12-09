@@ -9,6 +9,8 @@ export PATH="$PATH:$HOME/bin:/usr/local/bin:$HOME/.local/bin"
 
 export ZSH="$HOME/.oh-my-zsh"
 
+export TERM=xterm
+
 #ZSH_THEME="robbyrussell"
 ZSH_THEME="crunch"
 
@@ -21,7 +23,7 @@ source $ZSH/oh-my-zsh.sh
 
 # User configuration
 # export ARCHFLAGS="-arch x86_64"
-alias ls="eza"
+alias ls="eza -al --icons --git --smart-group --no-permissions"
 alias vi="nvim"
 alias viconfig="nvim ~/.config/nvim"
 alias c="claude-wrapper"
@@ -69,6 +71,10 @@ fre_chpwd() {
 typeset -gaU chpwd_functions
 chpwd_functions+=fre_chpwd
 
-
 # Added by Antigravity
 export PATH="/Users/eric/.antigravity/antigravity/bin:$PATH"
+
+# opencode
+export PATH=/Users/eric/.opencode/bin:$PATH
+
+fortune | cowsay | lolcat
