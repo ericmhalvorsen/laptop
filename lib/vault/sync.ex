@@ -17,13 +17,6 @@ defmodule Vault.Sync do
     * `:delete` - Delete extraneous files from dest (default: false)
     * `:progress_id` - Atom to track progress, enables streaming mode
     * `:dry_run` - If true, only simulate the operation
-
-  ## Examples
-
-      Sync.copy_tree("/src", "/dest")
-      Sync.copy_tree("/src", "/dest", exclude: [".DS_Store", "node_modules"])
-      Sync.copy_tree("/src", "/dest", delete: true, progress_id: :my_progress)
-      Sync.copy_tree("/src/file.txt", "/dest/file.txt")
   """
   def copy_tree(source, dest, opts \\ []) do
     dry_run = Keyword.get(opts, :dry_run, false)
@@ -103,7 +96,11 @@ defmodule Vault.Sync do
 
       {:ok, count}
     else
-      Progress.start_progress(progress_id, "  #{source} -> #{Path.basename(dest)}", count)
+      Progress.start_progress(
+        progress_id,
+        "  #{Keyword.get(opts, :label, source)} -> #{dest}",
+        count
+      )
 
       port = exec_rsync(source, dest, opts)
 
