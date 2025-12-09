@@ -46,19 +46,24 @@ defmodule Vault.Backup do
     if verbose do
       Progress.debug("Dirs to backup: #{inspect(dirs)}")
       Progress.debug("Tracker: #{inspect(MapSet.to_list(tracker))}")
-      Progress.debug("Tracker excludes: #{inspect(tracker_excludes -- Config.default_excludes())}")
+
+      Progress.debug(
+        "Tracker excludes: #{inspect(tracker_excludes -- Config.default_excludes())}"
+      )
     end
 
     exclude_patterns = base_exclude ++ tracker_excludes
 
     if !dry_run, do: File.mkdir_p!(Path.dirname(dest))
 
-    case Sync.copy_tree(source_dir, dest,
-           dirs: dirs,
-           exclude: exclude_patterns,
-           progress_id: progress_id,
-           verbose: verbose,
-           dry_run: dry_run
+    case Sync.copy_tree(
+           source_dir,
+           dest,
+           Keyword.merge(opts,
+             dirs: dirs,
+             exclude: exclude_patterns,
+             progress_id: progress_id
+           )
          ) do
       {:ok, total_size, count} ->
         updated_tracker =
@@ -68,7 +73,9 @@ defmodule Vault.Backup do
 
         if verbose,
           do:
-            Progress.debug("Tracker: #{updated_tracker |> MapSet.to_list() |> Enum.count()} entries")
+            Progress.debug(
+              "Tracker: #{updated_tracker |> MapSet.to_list() |> Enum.count()} entries"
+            )
 
         {:ok,
          %{

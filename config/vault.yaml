@@ -3,7 +3,7 @@ version: 1
 :git:
   :dest: backup
   :steps:
-    # - brew
+    - brew
     - scripts
     - dotfiles
 
@@ -101,6 +101,7 @@ version: 1
     - .bun
     - .bundle
     - .cache
+    - .cargo
     - .cups
     - .dapr
     - .eye
@@ -127,7 +128,7 @@ version: 1
     - .zcompdump*
     - .zsh_sessions
     - ByHost
-    - Cache
+    - Cache*
     - CrashReporter
     - GPUCache
     - Google/Chrome/GrShaderCache

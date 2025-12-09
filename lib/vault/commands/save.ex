@@ -49,10 +49,10 @@ defmodule Vault.Commands.Save do
         step_config = step |> Map.new() |> Map.delete(:name)
 
         execute_step(
-          step.name,
+          step,
           Map.merge(step_config, %{dest: git_config.dest}),
           relative_root,
-          Keyword.put(opts, :flatten_paths, true)
+          Keyword.put(opts, :excludes, excludes)
         )
       end)
     end
@@ -65,7 +65,7 @@ defmodule Vault.Commands.Save do
         step_config = step |> Map.new() |> Map.delete(:name)
 
         execute_step(
-          step.name,
+          step,
           Map.put(step_config, :dest, config.vault.dest),
           relative_root,
           Keyword.put(opts, :exclude, excludes)
@@ -85,32 +85,39 @@ defmodule Vault.Commands.Save do
     |> Progress.puts()
   end
 
-  def execute_step(step, config, root, opts \\ nil) do
+  defp execute_step(step, config, root, opts) do
     source_path = FileUtils.expand_path(root)
     dest_path = FileUtils.expand_path(config.dest)
+    label = Map.get(step, :label, step.name)
 
-    Progress.puts(["\n", Progress.tag("→ Backing up #{Map.get(config, :label, step)}...", :cyan)])
+    Progress.puts([
+      "\n",
+      Progress.tag("→ Backing up #{label}...", :cyan)
+    ])
 
     result =
-      case step do
+      case step.name do
         "brew" ->
           Backup.homebrew(dest_path, opts)
 
         _ ->
           Backup.backup(
             source_path,
-            Path.join(dest_path, step),
+            Path.join(dest_path, step.name),
             config.contents || [],
-            opts || []
+            Keyword.put(opts, :label, label)
           )
       end
+
+    # Yeah thats a good idea dump it
+    if Process.whereis(Owl.LiveScreen), do: Owl.LiveScreen.await_render()
 
     case result do
       {:ok, result} ->
         Progress.puts([
           "  ",
           Progress.tag("✓", :green),
-          Progress.tag("   #{result.stats.count} entries transferred (", :blue),
+          Progress.tag("   #{result.stats.count} files transferred (", :blue),
           Progress.tag(["target ", FileUtils.format_size(result.stats.total_size)], :yellow),
           Progress.tag(") \n", :blue)
         ])
@@ -122,8 +129,5 @@ defmodule Vault.Commands.Save do
           " Failed: #{reason}"
         ])
     end
-
-    # Yeah thats a good idea dump it
-    if Process.whereis(Owl.LiveScreen), do: Owl.LiveScreen.flush()
   end
 end
