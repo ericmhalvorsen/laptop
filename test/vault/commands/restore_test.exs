@@ -3,8 +3,6 @@ defmodule Vault.Commands.RestoreTest do
   import ExUnit.CaptureIO
   import Vault.TestHelpers
 
-  @moduletag :skip
-
   setup :tmp_dir
 
   defp with_env(env, fun) do
@@ -23,77 +21,155 @@ defmodule Vault.Commands.RestoreTest do
     end
   end
 
-  test "dry-run restores full flow when vault has data", %{tmp_dir: tmp_dir} do
-    vault_path = Path.join(tmp_dir, "vault")
-    home_dir = Path.join(tmp_dir, "home")
-    File.mkdir_p!(vault_path)
-    File.mkdir_p!(home_dir)
+  defp write_test_config(path, opts) do
+    home = opts.home
+    vault_dest = opts.vault_dest
 
-    # Prepare vault structure
-    # home/
-    File.mkdir_p!(Path.join([vault_path, "home", "Documents"]))
-    create_test_file(Path.join([vault_path, "home", "Documents", "file.txt"]), "docs")
+    config = """
+:git:
+  :dest: #{Path.join(home, "git-backup")}
+  :steps: []
 
-    # fonts/
-    fonts_dir = Path.join([vault_path, "fonts"])
-    File.mkdir_p!(fonts_dir)
-    create_test_file(Path.join(fonts_dir, "MyFont.ttf"), "fontdata")
+:vault:
+  :dest: #{vault_dest}
+  :steps:
+    - :name: dotfiles
+      :label: "Dotfiles"
+      :contents:
+        - .zshrc
+        - .config/starship.toml
 
-    # dotfiles/
-    ddir = Path.join([vault_path, "dotfiles"])
-    File.mkdir_p!(ddir)
-    create_test_file(Path.join(ddir, ".zshrc"), "export PATH")
+:defaults:
+  :relative_root: #{home}
+  :exclude_patterns: []
+"""
 
-    # local-bin/
-    lbin = Path.join([vault_path, "local-bin"])
-    File.mkdir_p!(lbin)
-    create_test_file(Path.join(lbin, "myscript"), "#!/bin/sh\necho hi")
-
-    # app-support/
-    asrc = Path.join([vault_path, "app-support", "SomeApp"])
-    File.mkdir_p!(asrc)
-    create_test_file(Path.join(asrc, "config.json"), "{}")
-
-    output =
-      with_env(%{"DISABLE_VAULT_OUTPUT" => :unset}, fn ->
-        capture_io(fn ->
-          Vault.Commands.Restore.run([], vault_path: vault_path, dry_run: true)
-        end)
-      end)
-
-    # Headings
-    assert output =~ "Vault Restore"
-    assert output =~ "Restoring home directories"
-    assert output =~ "Restoring fonts"
-    assert output =~ "Restoring dotfiles and ~/.local/bin"
-    assert output =~ "Restoring Application Support"
-
-    # Dry-run lines
-    assert output =~ "dry-run:"
-    assert output =~ "would copy"
-
-    # Key paths referenced
-    assert output =~ Path.join(vault_path, "home")
-    assert output =~ Path.join(vault_path, "fonts")
-    assert output =~ Path.join(vault_path, "dotfiles")
-    assert output =~ Path.join(vault_path, "local-bin")
-    assert output =~ Path.join(vault_path, "app-support")
+    File.write!(path, config)
+    path
   end
 
-  test "dry-run prints helpful messages when vault is empty", %{tmp_dir: tmp_dir} do
-    vault_path = Path.join(tmp_dir, "vault_empty")
-    File.mkdir_p!(vault_path)
+  @tag timeout: 120_000
+  test "restores dotfiles from vault using test config", %{tmp_dir: tmp} do
+    vault_path = Path.join(tmp, "vault")
+    home = Path.join(tmp, "home")
+    File.mkdir_p!(home)
+
+    # Create vault structure
+    create_test_files(Path.join(vault_path, "dotfiles"), %{
+      ".zshrc" => "export PATH=$HOME/.local/bin:$PATH",
+      ".config/starship.toml" => "format = \"$all\""
+    })
+
+    config_path = Path.join(tmp, "vault_test.yaml")
+    write_test_config(config_path, %{home: home, vault_dest: vault_path})
 
     output =
       with_env(%{"DISABLE_VAULT_OUTPUT" => :unset}, fn ->
         capture_io(fn ->
-          Vault.Commands.Restore.run([], vault_path: vault_path, dry_run: true)
+          Vault.Commands.Restore.run([], config_path: config_path, vault_path: vault_path)
         end)
       end)
 
-    assert output =~ "No home data found in vault/home/"
-    assert output =~ "No fonts found in vault/fonts/"
-    assert output =~ "No dotfiles found in vault/dotfiles/"
-    assert output =~ "No Application Support data found in vault/app-support/"
+    assert output =~ "Vault Restore"
+    assert File.exists?(Path.join(home, ".zshrc"))
+    assert File.exists?(Path.join([home, ".config", "starship.toml"]))
+
+    # Verify content
+    assert File.read!(Path.join(home, ".zshrc")) == "export PATH=$HOME/.local/bin:$PATH"
+    assert File.read!(Path.join([home, ".config", "starship.toml"])) == "format = \"$all\""
+  end
+
+  @tag timeout: 120_000
+  test "handles empty vault directory using test config", %{tmp_dir: tmp} do
+    vault_path = Path.join(tmp, "vault2")
+    home = Path.join(tmp, "home2")
+    File.mkdir_p!(home)
+    File.mkdir_p!(vault_path)
+
+    config_path = Path.join(tmp, "vault_test_empty.yaml")
+    write_test_config(config_path, %{home: home, vault_dest: vault_path})
+
+    output =
+      with_env(%{"DISABLE_VAULT_OUTPUT" => :unset}, fn ->
+        capture_io(fn ->
+          Vault.Commands.Restore.run([], config_path: config_path, vault_path: vault_path)
+        end)
+      end)
+
+    assert output =~ "Vault Restore"
+    assert output =~ "Skipping"
+  end
+
+  @tag timeout: 120_000
+  test "dry-run shows what would be restored", %{tmp_dir: tmp} do
+    vault_path = Path.join(tmp, "vault3")
+    home = Path.join(tmp, "home3")
+    File.mkdir_p!(home)
+
+    # Create vault structure
+    create_test_files(Path.join(vault_path, "dotfiles"), %{
+      ".zshrc" => "export PATH=$HOME/.local/bin:$PATH"
+    })
+
+    config_path = Path.join(tmp, "vault_test_dry.yaml")
+    write_test_config(config_path, %{home: home, vault_dest: vault_path})
+
+    output =
+      with_env(%{"DISABLE_VAULT_OUTPUT" => :unset}, fn ->
+        capture_io(fn ->
+          Vault.Commands.Restore.run([],
+            config_path: config_path,
+            vault_path: vault_path,
+            dry_run: true
+          )
+        end)
+      end)
+
+    assert output =~ "Vault Restore"
+    assert output =~ "dry-run:"
+
+    # Files should NOT be created in dry-run mode
+    refute File.exists?(Path.join(home, ".zshrc"))
+  end
+
+  @tag timeout: 120_000
+  test "round-trip: save then restore preserves files", %{tmp_dir: tmp} do
+    vault_path = Path.join(tmp, "vault_rt")
+    home1 = Path.join(tmp, "home_src")
+    home2 = Path.join(tmp, "home_dest")
+    File.mkdir_p!(home1)
+    File.mkdir_p!(home2)
+
+    # Create original files
+    create_test_files(home1, %{
+      ".zshrc" => "original content",
+      ".config/starship.toml" => "original toml"
+    })
+
+    config_path = Path.join(tmp, "vault_test_rt.yaml")
+    write_test_config(config_path, %{home: home1, vault_dest: vault_path})
+
+    # Save
+    with_env(%{"DISABLE_VAULT_OUTPUT" => :unset}, fn ->
+      capture_io(fn ->
+        Vault.Commands.Save.run([], config_path: config_path, vault_path: vault_path)
+      end)
+    end)
+
+    # Restore to different home
+    config_path2 = Path.join(tmp, "vault_test_rt2.yaml")
+    write_test_config(config_path2, %{home: home2, vault_dest: vault_path})
+
+    with_env(%{"DISABLE_VAULT_OUTPUT" => :unset}, fn ->
+      capture_io(fn ->
+        Vault.Commands.Restore.run([], config_path: config_path2, vault_path: vault_path)
+      end)
+    end)
+
+    # Verify files were restored with correct content
+    assert File.exists?(Path.join(home2, ".zshrc"))
+    assert File.exists?(Path.join([home2, ".config", "starship.toml"]))
+    assert File.read!(Path.join(home2, ".zshrc")) == "original content"
+    assert File.read!(Path.join([home2, ".config", "starship.toml"])) == "original toml"
   end
 end
