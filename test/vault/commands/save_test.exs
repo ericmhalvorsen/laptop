@@ -26,6 +26,13 @@ defmodule Vault.Commands.SaveTest do
     vault_dest = opts.vault_dest
 
     config = """
+:steps:
+  - :name: dotfiles
+    :label: "Dotfiles"
+    :contents:
+      - .zshrc
+      - .config/starship.toml
+
 :git:
   :dest: #{Path.join(home, "git-backup")}
   :steps: []
@@ -33,11 +40,7 @@ defmodule Vault.Commands.SaveTest do
 :vault:
   :dest: #{vault_dest}
   :steps:
-    - :name: dotfiles
-      :label: "Dotfiles"
-      :contents:
-        - .zshrc
-        - .config/starship.toml
+    - dotfiles
 
 :defaults:
   :relative_root: #{home}

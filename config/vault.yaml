@@ -1,5 +1,98 @@
 version: 1
 
+# Master list of all backup steps
+:steps:
+  - :name: brew
+    :label: "Brewfile"
+
+  - :name: sensitive
+    :label: "SSH Keys, GPG Keys, AWS Keys, Personal Creds"
+    :contents:
+      - .ssh
+      - .gnupg
+      - .aws
+      - .config/private
+
+  - :name: scripts
+    :contents:
+      - .local/bin/*
+
+  - :name: dotfiles
+    :contents:
+      - .bashrc
+      - .bash_profile
+      - .fdignore
+      - .gitconfig
+      - .gitconfig_local
+      - .gitattributes
+      - .hushlogin
+      - .profile
+      - .viminfo
+      - .vimrc
+      - .zlogin
+      - .zprofile
+      - .zsh
+      - .zshrc
+      - .zshenv
+
+  - :name: configdirs
+    :contents:
+      - .antigravity
+      - .bun
+      - .claude
+      - .codeium
+      - .config
+      - .cursor
+      - .docker
+      - .gemini
+      - .local
+      - .mkshrc
+      - .netrc
+      - .oh-my-zsh
+      - .opencode
+      - .promptuary
+      - .ruby-lsp
+      - .supermaven
+      - .vscode
+      - .warp
+      - .windsurf
+
+  - :name: fonts
+    :label: "Fonts"
+    :contents:
+      - Library/Fonts
+
+  - :name: histories
+    :label: "Shell Histories"
+    :contents:
+      - .*_history
+
+  - :name: homedirs
+    :label: "Home Directories"
+    :contents:
+      - Applications
+      - code
+      - Desktop
+      - Documents
+      - Downloads
+      - go
+      - Motionik-Recordings
+      - Movies
+      - Music
+      - Pictures
+      - Public
+      - Themes
+
+  - :name: app_config
+    :label: "Application Support and Preferences"
+    :contents:
+      - "Library/Application Support"
+      - Library/Preferences
+
+  - :name: backup
+    :label: Everything else
+    :contents: ~/
+# Git backup configuration - which steps to save to git
 :git:
   :dest: ./
   :steps:
@@ -7,100 +100,22 @@ version: 1
     - scripts
     - dotfiles
 
+# Vault backup configuration - which steps to save to vault
 :vault:
   :dest: ~/VaultBackup
-
   :steps:
-    - :name: brew
-      :label: "Brewfile"
-
-    - :name: sensitive
-      :label: "SSH Keys, GPG Keys, AWS Keys, Personal Creds"
-      :contents:
-        - .ssh
-        - .gnupg
-        - .aws
-        - .config/private
-
-    - :name: scripts
-      :contents:
-        - .local/bin/*
-
-    - :name: dotfiles
-      :contents:
-        - .bashrc
-        - .bash_profile
-        - .fdignore
-        - .gitconfig
-        - .gitconfig_local
-        - .gitattributes
-        - .hushlogin
-        - .profile
-        - .viminfo
-        - .vimrc
-        - .zlogin
-        - .zprofile
-        - .zsh
-        - .zshrc
-        - .zshenv
-
-    - :name: configdirs
-      :contents:
-        - .antigravity
-        - .bun
-        - .claude
-        - .codeium
-        - .config
-        - .cursor
-        - .docker
-        - .gemini
-        - .local
-        - .mkshrc
-        - .netrc
-        - .oh-my-zsh
-        - .opencode
-        - .promptuary
-        - .ruby-lsp
-        - .supermaven
-        - .vscode
-        - .warp
-        - .windsurf
-
-    - :name: fonts
-      :label: "Fonts"
-      :contents:
-        - Library/Fonts
-
-    - :name: histories
-      :label: "Shell Histories"
-      :contents:
-        - .*_history
-
-    - :name: homedirs
-      :label: "Home Directories"
-      :contents:
-        - Applications
-        - code
-        - Desktop
-        - Documents
-        - Downloads
-        - go
-        - Motionik-Recordings
-        - Movies
-        - Music
-        - Pictures
-        - Public
-        - Themes
-
-    - :name: app_config
-      :label: "Application Support and Preferences"
-      :contents:
-        - "Library/Application Support"
-        - Library/Preferences
-
-    - :name: backup
-      :label: Everything else
-      :contents: ~/
+    - brew
+    - sensitive
+    - scripts
+    - dotfiles
+    - configdirs
+    - fonts
+    - histories
+    - homedirs
+    - app_config
+    - backup
+  :restore_skip:
+    - backup
 
 :defaults:
   :relative_root: ~/
