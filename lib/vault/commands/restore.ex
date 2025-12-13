@@ -76,6 +76,9 @@ defmodule Vault.Commands.Restore do
           "brew" ->
             Restore.homebrew(Path.dirname(source_path), opts)
 
+          "apt" ->
+            Restore.apt(Path.dirname(source_path), opts)
+
           _ ->
             Restore.restore(
               source_path,

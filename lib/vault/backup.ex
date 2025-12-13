@@ -121,43 +121,163 @@ defmodule Vault.Backup do
     dest_path = fn file -> Path.join([dest_dir, "brew", file]) end
     brewfile_path = dest_path.("Brewfile")
 
-    with :ok <- if(using_mock, do: :ok, else: ensure_homebrew_installed()),
-         {:ok, formulas} <- brew(["list", "--formula"], dry_run),
-         {:ok, casks} <- brew(["list", "--cask"], dry_run),
-         {:ok, taps} <- brew(["tap"], dry_run),
-         {:ok, _} <- FileUtils.ensure_dir(dest_path.("/"), dry_run),
-         {:ok, _} <- File.rm_rf(brewfile_path),
-         {:ok, _} <- brew(["bundle", "dump", "--file=#{brewfile_path}"], dry_run),
-         {:ok, _} <-
-           FileUtils.output_file(dest_path.("formulas.txt"), formulas, dry_run),
-         {:ok, _} <-
-           FileUtils.output_file(dest_path.("casks.txt"), casks, dry_run),
-         {:ok, _} <-
-           FileUtils.output_file(dest_path.("taps.txt"), taps, dry_run) do
-      {:ok, size} = FileUtils.file_size(dest_path.("/"))
+    # Check if Homebrew is installed
+    case if(using_mock, do: :ok, else: ensure_homebrew_installed()) do
+      {:error, _reason} ->
+        # Homebrew not installed, skip gracefully
+        {:ok,
+         %{
+           summary: ["Homebrew not installed, skipping"],
+           stats: %{count: 0, total_size: 0}
+         }}
 
-      stats = %{
-        brewfile: brewfile_path,
-        formulas: length(formulas),
-        casks: length(casks),
-        taps: length(taps),
-        count: length(taps) + length(casks) + length(formulas),
-        total_size: size
-      }
+      :ok ->
+        with {:ok, formulas} <- brew(["list", "--formula"], dry_run),
+             {:ok, casks} <- brew(["list", "--cask"], dry_run),
+             {:ok, taps} <- brew(["tap"], dry_run),
+             {:ok, _} <- FileUtils.ensure_dir(dest_path.("/"), dry_run),
+             {:ok, _} <- File.rm_rf(brewfile_path),
+             {:ok, _} <- brew(["bundle", "dump", "--file=#{brewfile_path}"], dry_run),
+             {:ok, _} <-
+               FileUtils.output_file(dest_path.("formulas.txt"), formulas, dry_run),
+             {:ok, _} <-
+               FileUtils.output_file(dest_path.("casks.txt"), casks, dry_run),
+             {:ok, _} <-
+               FileUtils.output_file(dest_path.("taps.txt"), taps, dry_run) do
+          {:ok, size} = FileUtils.file_size(dest_path.("/"))
 
-      {:ok,
-       %{
-         summary: [
-           "    Saved homebrew: \n",
-           "      #{stats[:formulas]} formulas\n",
-           "      #{stats[:casks]} casks\n",
-           "      #{stats[:taps]} taps\n"
-         ],
-         stats: stats
-       }}
-    else
-      {:error, reason} -> {:error, reason}
+          stats = %{
+            brewfile: brewfile_path,
+            formulas: length(formulas),
+            casks: length(casks),
+            taps: length(taps),
+            count: length(taps) + length(casks) + length(formulas),
+            total_size: size
+          }
+
+          {:ok,
+           %{
+             summary: [
+               "    Saved homebrew: \n",
+               "      #{stats[:formulas]} formulas\n",
+               "      #{stats[:casks]} casks\n",
+               "      #{stats[:taps]} taps\n"
+             ],
+             stats: stats
+           }}
+        else
+          {:error, reason} -> {:error, reason}
+        end
     end
+  end
+
+  @doc """
+  Backs up APT package manager data to the specified destination directory.
+
+  Creates an `apt/` subdirectory in the destination and saves:
+  - packages.txt (list of installed packages)
+  - selections.txt (dpkg selections for reinstall)
+  - sources.list (APT sources configuration if readable)
+  - sources.list.d/ (additional source configurations if readable)
+
+  ## Parameters
+
+    * `dest_dir` - Destination directory for the backup
+    * `opts` - Options keyword list
+      * `:dry_run` - Boolean, if true only count packages without writing files
+
+  ## Returns
+
+    * `{:ok, result}` - Success with counts map containing package stats
+    * `{:error, reason}` - Failure with reason
+  """
+  def apt(dest_dir, opts \\ []) do
+    dry_run = Keyword.get(opts, :dry_run, false)
+    using_mock = Keyword.has_key?(opts, :cmd)
+    dest_path = fn file -> Path.join([dest_dir, "apt", file]) end
+
+    # Check if APT is installed
+    case if(using_mock, do: :ok, else: ensure_apt_installed()) do
+      {:error, _reason} ->
+        # APT not installed, skip gracefully
+        {:ok,
+         %{
+           summary: ["APT not installed, skipping"],
+           stats: %{count: 0, total_size: 0}
+         }}
+
+      :ok ->
+        with {:ok, packages} <- apt_cmd(["list", "--installed"], dry_run),
+             {:ok, selections} <- dpkg_cmd(["--get-selections"], dry_run),
+             {:ok, _} <- FileUtils.ensure_dir(dest_path.("/"), dry_run),
+             {:ok, _} <-
+               FileUtils.output_file(dest_path.("packages.txt"), packages, dry_run),
+             {:ok, _} <-
+               FileUtils.output_file(dest_path.("selections.txt"), selections, dry_run),
+             :ok <- backup_apt_sources(dest_path, dry_run) do
+          {:ok, size} = FileUtils.file_size(dest_path.("/"))
+
+          stats = %{
+            packages: length(packages),
+            count: length(packages),
+            total_size: size
+          }
+
+          {:ok,
+           %{
+             summary: [
+               "    Saved APT packages: \n",
+               "      #{stats[:packages]} packages\n"
+             ],
+             stats: stats
+           }}
+        else
+          {:error, reason} -> {:error, reason}
+        end
+    end
+  end
+
+  defp backup_apt_sources(dest_path, dry_run) do
+    sources_file = "/etc/apt/sources.list"
+    sources_dir = "/etc/apt/sources.list.d"
+
+    # Try to copy sources.list if it exists and is readable
+    if File.exists?(sources_file) and File.stat!(sources_file).access != :none do
+      case File.read(sources_file) do
+        {:ok, content} ->
+          FileUtils.output_file(dest_path.("sources.list"), [content], dry_run)
+
+        {:error, _} ->
+          {:ok, nil}
+      end
+    end
+
+    # Try to copy sources.list.d if it exists and is readable
+    if File.exists?(sources_dir) and File.dir?(sources_dir) do
+      dest_sources_dir = dest_path.("sources.list.d")
+
+      if !dry_run do
+        File.mkdir_p!(dest_sources_dir)
+
+        case File.ls(sources_dir) do
+          {:ok, files} ->
+            Enum.each(files, fn file ->
+              src = Path.join(sources_dir, file)
+              dst = Path.join(dest_sources_dir, file)
+
+              case File.read(src) do
+                {:ok, content} -> File.write!(dst, content)
+                {:error, _} -> :ok
+              end
+            end)
+
+          {:error, _} ->
+            :ok
+        end
+      end
+    end
+
+    :ok
   end
 
   defp tracker_excludes_for_dir(dir, tracker) do
@@ -210,6 +330,63 @@ defmodule Vault.Backup do
     System.find_executable("brew") ||
       if(File.exists?("/opt/homebrew/bin/brew"), do: "/opt/homebrew/bin/brew") ||
       if(File.exists?("/usr/local/bin/brew"), do: "/usr/local/bin/brew") ||
+      nil
+  end
+
+  defp ensure_apt_installed do
+    case apt_cmd_path() do
+      nil -> {:error, "APT is not installed"}
+      _path -> :ok
+    end
+  end
+
+  defp apt_cmd(_args, true), do: {:ok, ["dry_run"]}
+
+  defp apt_cmd(args, _) do
+    case System.cmd(apt_cmd_path(), args, stderr_to_stdout: true) do
+      {output, 0} ->
+        packages =
+          output
+          |> String.split("\n", trim: true)
+
+        {:ok, packages}
+
+      {error, _code} ->
+        {:error, "Failed to run apt #{inspect(args)}: #{error}"}
+    end
+  end
+
+  defp dpkg_cmd(_args, true), do: {:ok, ["dry_run"]}
+
+  defp dpkg_cmd(args, _) do
+    case dpkg_cmd_path() do
+      nil ->
+        {:error, "dpkg not found"}
+
+      cmd ->
+        case System.cmd(cmd, args, stderr_to_stdout: true) do
+          {output, 0} ->
+            selections =
+              output
+              |> String.split("\n", trim: true)
+
+            {:ok, selections}
+
+          {error, _code} ->
+            {:error, "Failed to run dpkg #{inspect(args)}: #{error}"}
+        end
+    end
+  end
+
+  defmemo apt_cmd_path do
+    System.find_executable("apt") ||
+      if(File.exists?("/usr/bin/apt"), do: "/usr/bin/apt") ||
+      nil
+  end
+
+  defmemo dpkg_cmd_path do
+    System.find_executable("dpkg") ||
+      if(File.exists?("/usr/bin/dpkg"), do: "/usr/bin/dpkg") ||
       nil
   end
 end

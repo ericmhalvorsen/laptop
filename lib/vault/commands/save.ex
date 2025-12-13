@@ -90,6 +90,9 @@ defmodule Vault.Commands.Save do
         "brew" ->
           Backup.homebrew(dest_path, opts)
 
+        "apt" ->
+          Backup.apt(dest_path, opts)
+
         _ ->
           Backup.backup(
             source_path,

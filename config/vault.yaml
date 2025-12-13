@@ -5,6 +5,9 @@ version: 1
   - :name: brew
     :label: "Brewfile"
 
+  - :name: apt
+    :label: "APT Packages"
+
   - :name: sensitive
     :label: "SSH Keys, GPG Keys, AWS Keys, Personal Creds"
     :contents:
@@ -97,6 +100,7 @@ version: 1
   :dest: ./
   :steps:
     - brew
+    - apt
     - scripts
     - dotfiles
 
@@ -105,6 +109,7 @@ version: 1
   :dest: ~/VaultBackup
   :steps:
     - brew
+    - apt
     - sensitive
     - scripts
     - dotfiles

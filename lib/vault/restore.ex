@@ -92,39 +92,158 @@ defmodule Vault.Restore do
     vault_path = fn file -> Path.join([vault_dir, "brew", file]) end
     brewfile_path = vault_path.("Brewfile")
 
-    with :ok <- if(using_mock, do: :ok, else: ensure_homebrew_installed()),
-         true <- File.exists?(brewfile_path) do
-      if dry_run do
-        Progress.puts([
-          "  ",
-          Progress.tag("dry-run:", :light_black),
-          " would restore Homebrew from Brewfile"
-        ])
+    # Check if Homebrew is installed
+    case if(using_mock, do: :ok, else: ensure_homebrew_installed()) do
+      {:error, _reason} ->
+        # Homebrew not installed, skip gracefully
+        {:ok,
+         %{
+           summary: ["Homebrew not installed, skipping"],
+           stats: %{count: 0, total_size: 0}
+         }}
 
-        {:ok, %{summary: ["Would restore Homebrew packages"], stats: %{count: 0, total_size: 0}}}
-      else
-        case System.cmd("brew", ["bundle", "install", "--file=#{brewfile_path}"],
-               stderr_to_stdout: true
-             ) do
-          {output, 0} ->
-            {:ok, size} = FileUtils.file_size(vault_path.("/"))
+      :ok ->
+        if !File.exists?(brewfile_path) do
+          {:ok,
+           %{
+             summary: ["Brewfile not found in vault, skipping"],
+             stats: %{count: 0, total_size: 0}
+           }}
+        else
+          if dry_run do
+            Progress.puts([
+              "  ",
+              Progress.tag("dry-run:", :light_black),
+              " would restore Homebrew from Brewfile"
+            ])
 
             {:ok,
              %{
-               summary: ["Restored Homebrew packages from Brewfile"],
-               stats: %{count: 1, total_size: size}
+               summary: ["Would restore Homebrew packages"],
+               stats: %{count: 0, total_size: 0}
              }}
+          else
+            case System.cmd("brew", ["bundle", "install", "--file=#{brewfile_path}"],
+                   stderr_to_stdout: true
+                 ) do
+              {_output, 0} ->
+                {:ok, size} = FileUtils.file_size(vault_path.("/"))
 
-          {error, _code} ->
-            {:error, "Failed to restore Homebrew: #{error}"}
+                {:ok,
+                 %{
+                   summary: ["Restored Homebrew packages from Brewfile"],
+                   stats: %{count: 1, total_size: size}
+                 }}
+
+              {error, _code} ->
+                {:error, "Failed to restore Homebrew: #{error}"}
+            end
+          end
         end
-      end
-    else
-      false ->
-        {:error, "Brewfile not found in vault"}
+    end
+  end
 
-      {:error, reason} ->
-        {:error, reason}
+  @doc """
+  Restores APT packages from the specified vault directory.
+
+  Reads the package lists and configurations from the vault and uses them
+  to restore the APT environment.
+
+  ## Parameters
+
+    * `vault_dir` - Vault directory containing the apt/ subdirectory
+    * `opts` - Options keyword list
+      * `:dry_run` - Boolean, if true only show what would be done
+
+  ## Returns
+
+    * `{:ok, result}` - Success with stats map
+    * `{:error, reason}` - Failure with reason
+  """
+  def apt(vault_dir, opts \\ []) do
+    dry_run = Keyword.get(opts, :dry_run, false)
+    using_mock = Keyword.has_key?(opts, :cmd)
+    vault_path = fn file -> Path.join([vault_dir, "apt", file]) end
+    selections_path = vault_path.("selections.txt")
+
+    # Check if APT is installed
+    case if(using_mock, do: :ok, else: ensure_apt_installed()) do
+      {:error, _reason} ->
+        # APT not installed, skip gracefully
+        {:ok,
+         %{
+           summary: ["APT not installed, skipping"],
+           stats: %{count: 0, total_size: 0}
+         }}
+
+      :ok ->
+        if !File.exists?(selections_path) do
+          {:ok,
+           %{
+             summary: ["APT selections not found in vault, skipping"],
+             stats: %{count: 0, total_size: 0}
+           }}
+        else
+          if dry_run do
+            Progress.puts([
+              "  ",
+              Progress.tag("dry-run:", :light_black),
+              " would restore APT packages from selections"
+            ])
+
+            {:ok,
+             %{
+               summary: ["Would restore APT packages"],
+               stats: %{count: 0, total_size: 0}
+             }}
+          else
+            # Restore sources if available
+            restore_apt_sources(vault_path)
+
+            # Restore package selections
+            case System.cmd("dpkg", ["--set-selections"],
+                   stderr_to_stdout: true,
+                   input: File.read!(selections_path)
+                 ) do
+              {_output, 0} ->
+                {:ok, size} = FileUtils.file_size(vault_path.("/"))
+
+                {:ok,
+                 %{
+                   summary: ["Restored APT package selections (run 'apt-get dselect-upgrade' to install)"],
+                   stats: %{count: 1, total_size: size}
+                 }}
+
+              {error, _code} ->
+                {:error, "Failed to restore APT selections: #{error}"}
+            end
+          end
+        end
+    end
+  end
+
+  defp restore_apt_sources(vault_path) do
+    sources_file = vault_path.("sources.list")
+    sources_dir = vault_path.("sources.list.d")
+
+    # Restore sources.list if it exists (would need sudo, so we just inform the user)
+    if File.exists?(sources_file) do
+      Progress.puts([
+        "  ",
+        Progress.tag("Note:", :yellow),
+        " APT sources found in vault. To restore, run:\n",
+        "  sudo cp #{sources_file} /etc/apt/sources.list"
+      ])
+    end
+
+    # Restore sources.list.d if it exists
+    if File.exists?(sources_dir) and File.dir?(sources_dir) do
+      Progress.puts([
+        "  ",
+        Progress.tag("Note:", :yellow),
+        " APT sources.list.d found in vault. To restore, run:\n",
+        "  sudo cp -r #{sources_dir}/* /etc/apt/sources.list.d/"
+      ])
     end
   end
 
@@ -135,10 +254,23 @@ defmodule Vault.Restore do
     end
   end
 
+  defp ensure_apt_installed do
+    case apt_cmd_path() do
+      nil -> {:error, "APT is not installed"}
+      _path -> :ok
+    end
+  end
+
   defmemo brew_cmd do
     System.find_executable("brew") ||
       if(File.exists?("/opt/homebrew/bin/brew"), do: "/opt/homebrew/bin/brew") ||
       if(File.exists?("/usr/local/bin/brew"), do: "/usr/local/bin/brew") ||
+      nil
+  end
+
+  defmemo apt_cmd_path do
+    System.find_executable("apt") ||
+      if(File.exists?("/usr/bin/apt"), do: "/usr/bin/apt") ||
       nil
   end
 end
