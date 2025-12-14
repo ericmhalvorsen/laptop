@@ -121,23 +121,17 @@ defmodule Vault.Backup do
     dest_path = fn file -> Path.join([dest_dir, "brew", file]) end
     brewfile_path = dest_path.("Brewfile")
 
-    # Check if Homebrew is installed
     case if(using_mock, do: :ok, else: ensure_homebrew_installed()) do
       {:error, _reason} ->
-        # Homebrew not installed, skip gracefully
-        {:ok,
-         %{
-           summary: ["Homebrew not installed, skipping"],
-           stats: %{count: 0, total_size: 0}
-         }}
+        {:skipped, "Homebrew not installed"}
 
       :ok ->
-        with {:ok, formulas} <- brew(["list", "--formula"], dry_run),
-             {:ok, casks} <- brew(["list", "--cask"], dry_run),
-             {:ok, taps} <- brew(["tap"], dry_run),
+        with {:ok, formulas} <- brew_cmd(["list", "--formula"], dry_run),
+             {:ok, casks} <- brew_cmd(["list", "--cask"], dry_run),
+             {:ok, taps} <- brew_cmd(["tap"], dry_run),
              {:ok, _} <- FileUtils.ensure_dir(dest_path.("/"), dry_run),
              {:ok, _} <- File.rm_rf(brewfile_path),
-             {:ok, _} <- brew(["bundle", "dump", "--file=#{brewfile_path}"], dry_run),
+             {:ok, _} <- brew_cmd(["bundle", "dump", "--file=#{brewfile_path}"], dry_run),
              {:ok, _} <-
                FileUtils.output_file(dest_path.("formulas.txt"), formulas, dry_run),
              {:ok, _} <-
@@ -196,15 +190,9 @@ defmodule Vault.Backup do
     using_mock = Keyword.has_key?(opts, :cmd)
     dest_path = fn file -> Path.join([dest_dir, "apt", file]) end
 
-    # Check if APT is installed
     case if(using_mock, do: :ok, else: ensure_apt_installed()) do
       {:error, _reason} ->
-        # APT not installed, skip gracefully
-        {:ok,
-         %{
-           summary: ["APT not installed, skipping"],
-           stats: %{count: 0, total_size: 0}
-         }}
+        {:skipped, "APT not installed"}
 
       :ok ->
         with {:ok, packages} <- apt_cmd(["list", "--installed"], dry_run),
@@ -241,7 +229,6 @@ defmodule Vault.Backup do
     sources_file = "/etc/apt/sources.list"
     sources_dir = "/etc/apt/sources.list.d"
 
-    # Try to copy sources.list if it exists and is readable
     if File.exists?(sources_file) and File.stat!(sources_file).access != :none do
       case File.read(sources_file) do
         {:ok, content} ->
@@ -252,7 +239,6 @@ defmodule Vault.Backup do
       end
     end
 
-    # Try to copy sources.list.d if it exists and is readable
     if File.exists?(sources_dir) and File.dir?(sources_dir) do
       dest_sources_dir = dest_path.("sources.list.d")
 
@@ -281,10 +267,8 @@ defmodule Vault.Backup do
   end
 
   defp tracker_excludes_for_dir(dir, tracker) do
-    # Normalize: remove trailing slash from dir for comparison
     normalized_dir = String.trim_trailing(dir, "/")
 
-    # Special case: if dir is empty or just a dot, match all top-level tracker entries
     if normalized_dir == "" or normalized_dir == "." do
       tracker
       |> Enum.map(&String.trim_trailing(&1, "/"))
@@ -294,7 +278,6 @@ defmodule Vault.Backup do
       tracker
       |> Enum.filter(fn path ->
         normalized_path = String.trim_trailing(path, "/")
-        # Check if the tracked path is a child of the current dir
         normalized_path != normalized_dir and String.starts_with?(normalized_path, prefix)
       end)
       |> Enum.map(fn path ->
@@ -310,9 +293,16 @@ defmodule Vault.Backup do
     end
   end
 
-  defp brew(_args, true), do: {:ok, ["dry_run"]}
+  defp ensure_apt_installed do
+    case apt_cmd_path() do
+      nil -> {:error, "APT is not installed"}
+      _path -> :ok
+    end
+  end
 
-  defp brew(args, _) do
+  defp brew_cmd(_args, true), do: {:ok, ["dry_run"]}
+
+  defp brew_cmd(args, _) do
     case System.cmd(brew_cmd(), args, stderr_to_stdout: true) do
       {output, 0} ->
         formulas =
@@ -323,20 +313,6 @@ defmodule Vault.Backup do
 
       {error, _code} ->
         {:error, "Failed to run brew #{args}: #{error}}"}
-    end
-  end
-
-  defmemo brew_cmd do
-    System.find_executable("brew") ||
-      if(File.exists?("/opt/homebrew/bin/brew"), do: "/opt/homebrew/bin/brew") ||
-      if(File.exists?("/usr/local/bin/brew"), do: "/usr/local/bin/brew") ||
-      nil
-  end
-
-  defp ensure_apt_installed do
-    case apt_cmd_path() do
-      nil -> {:error, "APT is not installed"}
-      _path -> :ok
     end
   end
 
@@ -376,6 +352,13 @@ defmodule Vault.Backup do
             {:error, "Failed to run dpkg #{inspect(args)}: #{error}"}
         end
     end
+  end
+
+  defmemo brew_cmd do
+    System.find_executable("brew") ||
+      if(File.exists?("/opt/homebrew/bin/brew"), do: "/opt/homebrew/bin/brew") ||
+      if(File.exists?("/usr/local/bin/brew"), do: "/usr/local/bin/brew") ||
+      nil
   end
 
   defmemo apt_cmd_path do

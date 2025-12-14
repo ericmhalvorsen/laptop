@@ -13,7 +13,6 @@ defmodule Vault.Commands.Save do
     config = Config.load(opts)
     relative_root = config.defaults.relative_root || "~/"
 
-    # Initialize step stats tracking
     State.init_step_stats()
 
     git_path = FileUtils.expand_path(config.git.dest)
@@ -46,8 +45,7 @@ defmodule Vault.Commands.Save do
           step,
           Map.merge(step_config, %{dest: config.git.dest}),
           relative_root,
-          Keyword.put(opts, :excludes, excludes),
-          :git
+          Keyword.put(opts, :excludes, excludes)
         )
       end)
     end
@@ -63,17 +61,15 @@ defmodule Vault.Commands.Save do
           step,
           Map.put(step_config, :dest, config.vault.dest),
           relative_root,
-          Keyword.put(opts, :exclude, excludes),
-          :vault
+          Keyword.put(opts, :exclude, excludes)
         )
       end)
     end
 
-    # Display summary with stats
     display_summary()
   end
 
-  defp execute_step(step, config, root, opts, target) do
+  defp execute_step(step, config, root, opts) do
     source_path = FileUtils.expand_path(root)
     dest_path = FileUtils.expand_path(config.dest)
     label = Map.get(step, :label, step.name)
@@ -117,15 +113,19 @@ defmodule Vault.Commands.Save do
           Progress.tag(") \n", :blue)
         ])
 
-        # Track stats (only for vault steps)
-        if target == :vault do
-          State.add_step_stat(step.name, %{
-            label: label,
-            count: result.stats.count,
-            total_size: result.stats.total_size,
-            runtime_ms: runtime_ms
-          })
-        end
+        State.add_step_stat(step.name, %{
+          label: label,
+          count: result.stats.count,
+          total_size: result.stats.total_size,
+          runtime_ms: runtime_ms
+        })
+
+      {:skipped, reason} ->
+        Progress.puts([
+          "  ",
+          Progress.tag("✓", :green),
+          " Skipped: #{reason}"
+        ])
 
       {:error, reason} ->
         Progress.puts([
