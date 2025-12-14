@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# Determine history file based on shell
+if [ -f "$HOME/.zsh_history" ]; then
+    histfile="$HOME/.zsh_history"
+elif [ -f "$HOME/.bash_history" ]; then
+    histfile="$HOME/.bash_history"
+else
+    gum style --foreground 196 "No history file found"
+    exit 1
+fi
+
+# Read history, clean up zsh timestamps, remove duplicates, reverse to show recent first
+selected=$(cat "$histfile" | sed 's/^: [0-9]*:[0-9]*;//' | awk '!seen[$0]++' | tac | gum filter --placeholder "Search command history...")
+
+if [ -z "$selected" ]; then
+    gum style --foreground 117 "No command selected"
+    exit 0
+fi
+
+# Copy to clipboard
+echo -n "$selected" | pbcopy
+
+gum style --foreground 150 "✓ Copied to clipboard:"
+gum style --foreground 212 "  $selected"

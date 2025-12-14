@@ -1,0 +1,52 @@
+#!/bin/bash
+
+# Check if in git repo
+if ! git rev-parse --git-dir > /dev/null 2>&1; then
+    gum style --foreground 196 "Error: Not in a git repository"
+    exit 1
+fi
+
+if [ -z "$1" ]; then
+    gum style --foreground 196 "Error: No file specified"
+    echo "Usage: git-remove-file <path/to/file>"
+    exit 1
+fi
+
+file="$1"
+
+gum style \
+    --border double \
+    --border-foreground 196 \
+    --padding "1 2" \
+    "$(gum style --foreground 196 --bold "⚠️  WARNING")" \
+    "" \
+    "This will remove '$file' from ALL git history" \
+    "This is a destructive operation and rewrites history" \
+    "" \
+    "You will need to force-push after this completes"
+
+echo ""
+
+if ! gum confirm "Are you sure you want to continue?"; then
+    gum style --foreground 117 "Aborted"
+    exit 0
+fi
+
+gum spin --spinner dot --title "Removing $file from git history..." -- \
+    git filter-branch --force --index-filter \
+    "git rm --cached --ignore-unmatch '$file'" \
+    --prune-empty --tag-name-filter cat -- --all
+
+if [ $? -eq 0 ]; then
+    echo ""
+    gum style --foreground 150 "✓ File removed from history"
+    echo ""
+    gum style --foreground 212 "Next steps:"
+    echo "1. git push origin --force --all"
+    echo "2. git push origin --force --tags"
+    echo ""
+    gum style --foreground 117 --italic "Cleanup: rm -rf .git/refs/original/ && git reflog expire --expire=now --all && git gc --prune=now --aggressive"
+else
+    gum style --foreground 196 "✗ Failed to remove file"
+    exit 1
+fi

@@ -30,28 +30,38 @@ version: 1
       :contents:
         - .bashrc
         - .bash_profile
+        - .fdignore
+        - .gitconfig
+        - .gitconfig_local
+        - .gitattributes
         - .hushlogin
         - .profile
+        - .viminfo
+        - .vimrc
         - .zlogin
         - .zprofile
         - .zsh
         - .zshrc
+        - .zshenv
 
     - :name: configdirs
       :contents:
         - .antigravity
+        - .bun
         - .claude
         - .codeium
         - .config
         - .cursor
+        - .docker
         - .gemini
-        - .gitconfig
-        - .gitattributes
         - .local
+        - .mkshrc
+        - .netrc
         - .oh-my-zsh
         - .opencode
         - .promptuary
-        - .viminfo
+        - .ruby-lsp
+        - .supermaven
         - .vscode
         - .warp
         - .windsurf
@@ -74,10 +84,13 @@ version: 1
         - Desktop
         - Documents
         - Downloads
+        - go
+        - Motionik-Recordings
         - Movies
         - Music
         - Pictures
         - Public
+        - Themes
 
     - :name: app_config
       :label: "Application Support and Preferences"
@@ -100,7 +113,6 @@ version: 1
     - .GlobalPreferences
     - .Trash
     - .android
-    - .bun
     - .bundle
     - .cache
     - .cargo
@@ -139,6 +151,7 @@ version: 1
     - ShaderCache
     - Thumbs.db
     - com.apple.*
+    - docker.sock
     - com.docker.docker
     - networkservices.plist
     - node_modules

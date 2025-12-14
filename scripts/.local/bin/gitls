@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -e
+
+FIND_BARE=0
+
+# Find all git repositories (both bare and non-bare)
+if [ "$1" = "--bare" ]; then
+  FIND_BARE=1
+  shift
+fi
+
+# Find non-bare repos (directories containing .git)
+find . -type d -name ".git" -prune 2>/dev/null | sed 's|/.git$||' | sed 's|^\./||'
+
+# Find bare repos (directories ending in .git that are bare)
+if [ $FIND_BARE -eq 1 ]; then
+  find . -type d -name "*.git" -exec sh -c '
+    if [ "$(git --git-dir="$1" rev-parse --is-bare-repository 2>/dev/null)" = "true" ]; then
+      printf "%s\n" "${1#./}"
+    fi
+  ' -- {} \; -prune 2>/dev/null
+fi

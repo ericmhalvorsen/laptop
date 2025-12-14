@@ -6,19 +6,23 @@ if [[ $# -eq 0 ]]; then
     exit 1
 fi
 
-if ! command -v cursor &> /dev/null; then
-    echo "Error: 'cursor' command not found"
-    echo "Install it: Open Cursor → Cmd+Shift+P → 'Install command line tools'"
+# Check if Gemfile exists
+if [ ! -f "Gemfile" ]; then
+    echo "Error: No Gemfile found in current directory"
     exit 1
 fi
 
 # Run bundle show interactively, capture to temp file
 tmpfile=$(mktemp)
-bundle show "$1" 2>&1 | tee "$tmpfile"
+if ! bundle show "$1" 2>&1 | tee "$tmpfile"; then
+    rm "$tmpfile"
+    exit 1
+fi
 
 # Get the last line that looks like a path, strip ANSI codes
 gem_path=$(grep "/" "$tmpfile" | grep -v "^[0-9] :" | tail -n 1 | sed -e 's/\x1b\[[0-9;]*[a-zA-Z]//g' -e "s/'$//" | xargs)
 rm "$tmpfile"
 
 # Open in cursor
-cursor "$gem_path"
+echo "Opening $gem_path in $EDITOR (set \$EDITOR to change)"
+$EDITOR "$gem_path"

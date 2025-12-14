@@ -1,4 +1,200 @@
-# This is Git's per-user configuration file.
+[alias]
+  l = log --pretty=oneline -n 20 --graph --abbrev-commit
+  # Show the diff between the latest commit and the current state.
+  d = "!git diff-index --quiet HEAD -- || clear; git --no-pager diff --patch-with-stat"
+  # `git di $number` shows the diff between the state `$number` revisions ago and the current state.
+  di = "!d() { git diff --patch-with-stat HEAD~$1; }; git diff-index --quiet HEAD -- || clear; d"
+  go = "!f() { git checkout -b \"$1\" 2> /dev/null || git checkout \"$1\"; }; f"
+  undo = reset --soft HEAD^
+  tags = tag -l
+  branches = branch --all
+  remotes = remote --verbose
+  aliases = config --get-regexp alias
+  amend = commit --amend --reuse-message=HEAD
+  credit = "!f() { git commit --amend --author \"$1 <$2>\" -C HEAD; }; f"
+  # Find branches containing commit
+  fb = "!f() { git branch -a --contains $1; }; f"
+  # Find commits by source code
+  fc = "!f() { git log --pretty=format:'%C(yellow)%h  %Cblue%ad  %Creset%s%Cgreen  [%cn] %Cred%d' --decorate --date=short -S$1; }; f"
+  # delete merged branches
+  dm = "!git branch --merged | grep -v '\\*' | xargs -n 1 git branch -d"
+  contributors = shortlog --summary --numbered
+  whoami = config user.email
+  poostorm = commit -m ''
+  nope = commit -m '🙈'
+  nope-2 = commit -m 'ಠ_ಠ'
+  poo = commit -m '💩'
+  firepoo = commit -am '🔥💩🔥
+  ded = commit -m '☠️' 
+  yup = commit -am '🤌'
+  
+  # Below this line uses external tools
+  # ######
+  # Quick commit all
+  ca = !git add ':(exclude,attr:builtin_objectmode=160000)' && git commit -av -m "$(gum write --width 80 --placeholder 'Commit Message')"
+
+  # Create a commit with inline message
+  ci = !git commit -m "$(gum write --width 80 --placeholder 'Commit Message')"
+
+  # Guided remove large file
+  remove = !git-remove-file
+
+  # Scan and list all repos (slow)
+  ls = !gum spin --title "Scanning for git repositories" --show-output  gitls
+
+  # Open remote in browser
+  open = !git-open
+
+  # Clean up branches with interactive picker
+  cleanbranch = !git branch | cut -c 3- | gum choose --no-limit | xargs git branch -D
+  
+  # Copy commit hash to clipboard
+  copycommit = !git log --oneline | gum filter | cut -d' ' -f1 | copy
+
+  # Cherry pick a commit range with interactive picker
+  cherry-pick-range = !git-cherrypick
+  
+  # Open a PR in the browser with interactive picker
+  pr = !gh pr list | cut -f1,2 | gum choose | cut -f1 | xargs gh pr view
+  
+  # Checkout a PR with interactive picker
+  checkout = !gh pr list | cut -f1,2 | gum choose | cut -f1 | xargs gh pr checkout
+
+  # Loads automatically but for good measure. Jump to point of interest in editor
+  # jump = !git-jump
+
+[apply]
+  whitespace = fix
+
+[branch]
+  sort = -committerdate
+
+[core]
+  excludesfile = ~/.gitignore
+  editor = nvim
+  pager = delta
+
+  # Treat spaces before tabs and all kinds of trailing whitespace as an error.
+  # [default] trailing-space: looks for spaces at the end of a line
+  # [default] space-before-tab: looks for spaces before tabs at the beginning of a line
+  whitespace = space-before-tab,-indent-with-non-tab,trailing-space
+
+  # Make `git rebase` safer on macOS.
+  # More info: <http://www.git-tower.com/blog/make-git-rebase-safe-on-osx/>
+  trustctime = false
+
+  # Prevent showing files whose names contain non-ASCII symbols as unversioned.
+  # http://michael-kuehnel.de/git/2014/11/21/git-mac-osx-and-german-umlaute.html
+  precomposeunicode = false
+
+  # Speed up commands involving untracked files such as `git status`.
+  # https://git-scm.com/docs/git-update-index#_untracked_cache
+  untrackedCache = true
+
+[color]
+  ui = true
+
+[color "branch"]
+  current = yellow reverse
+  local = yellow
+  remote = green
+
+[color "status"]
+  added = yellow
+  changed = green
+  untracked = cyan
+
+[init]
+  defaultBranch = main
+
+[help]
+  autoCorrect = prompt
+
+[filter "lfs"]
+  clean = git-lfs clean -- %f
+  smudge = git-lfs smudge -- %f
+  process = git-lfs filter-process
+  required = true
+
+[commit]
+  # https://help.github.com/articles/signing-commits-using-gpg/
+  gpgsign = true
+
+[gpg]
+  format = openpgp
+
 [user]
-name = Eric Halvorsen
-email = Viscousness@Gmail.com
+  signingkey = C09B5526
+
+[push]
+  default = current
+
+[merge]
+  tool = diffview
+  conflictstyle = diff3
+
+[mergetool]
+  prompt = false
+  keepBackup = false
+
+[mergetool "diffview"]
+  cmd = nvim -n -c "DiffviewOpen" "$MERGE"
+
+[pull]
+  ff = only
+  rebase = false
+
+[interactive]
+  diffFilter = delta --color-only --features=interactive
+
+[diff]
+  colorMoved = default
+  renames = copies
+
+[diff "bin"]
+  textconv = hexdump -v -C
+
+[help]
+  autocorrect = 1
+
+[merge]
+  log = true
+
+[push]
+  # https://git-scm.com/docs/git-config#git-config-pushdefault
+  default = simple
+  followTags = true
+
+[delta]
+  features = fn-gruvbox
+  navigate = true  # use n and N to move between diff sections
+  side-by-side = true
+  line-numbers = true
+
+[delta "interactive"]
+  keep-plus-minus-markers = false
+
+[include]
+  path = ~/.gitconfig_local
+
+[include]
+  path = ~/.gitconfig_themes
+
+[url "ssh://git@github.com/"]
+  insteadOf = https://github.com/
+
+[url "git@github.com:"]
+  insteadOf = "gh:"
+  pushInsteadOf = "github:"
+  pushInsteadOf = "git://github.com/"
+
+[url "git://github.com/"]
+  insteadOf = "github:"
+
+[url "git@gist.github.com:"]
+  insteadOf = "gst:"
+  pushInsteadOf = "gist:"
+  pushInsteadOf = "git://gist.github.com/"
+
+[url "git://gist.github.com/"]
+  insteadOf = "gist:"

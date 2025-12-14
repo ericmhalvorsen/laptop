@@ -1,0 +1,6 @@
+Applications/**
+Library/**
+Pictures/Photos\ Library.photoslibrary
+node_modules
+.cargo
+**/*.app

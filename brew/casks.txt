@@ -5,6 +5,7 @@ font-sekuya
 google-chrome
 ngrok
 postgres-unofficial
+rio
 rustdesk
 visual-studio-code
 yaak

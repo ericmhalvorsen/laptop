@@ -1,0 +1,36 @@
+#!/bin/bash
+
+if [ -z "$1" ]; then
+    gum style --foreground 196 "Error: No file specified"
+    echo "Usage: zipcheck <file>"
+    exit 1
+fi
+
+if [ ! -f "$1" ]; then
+    gum style --foreground 196 "Error: File not found: $1"
+    exit 1
+fi
+
+file="$1"
+origsize=$(wc -c < "$file")
+gzipsize=$(gzip -c "$file" | wc -c)
+ratio=$(echo "scale=2; $gzipsize * 100 / $origsize" | bc)
+savings=$(echo "scale=2; 100 - $ratio" | bc)
+
+gum style \
+    --border rounded \
+    --padding "1 2" \
+    --border-foreground 212 \
+    "$(gum style --bold --foreground 212 "File:") $(basename "$file")"
+
+echo ""
+
+gum style --foreground 117 "Original:  " --bold | tr -d '\n'
+gum style --foreground 255 "$(numfmt --to=iec-i --suffix=B $origsize)" --bold
+
+gum style --foreground 212 "Gzipped:   " --bold | tr -d '\n'
+gum style --foreground 255 "$(numfmt --to=iec-i --suffix=B $gzipsize)" --bold
+
+echo ""
+
+gum style --foreground 150 "Compression: ${ratio}% of original (${savings}% savings)" --italic

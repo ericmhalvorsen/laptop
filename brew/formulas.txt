@@ -3,13 +3,16 @@ apr
 apr-util
 argon2
 asdf
+atool
 autoconf
 automake
+bat
 brotli
 c-ares
 ca-certificates
 cairo
 certifi
+circumflex
 cmake
 composer
 coreutils
@@ -18,6 +21,8 @@ crush
 curl
 dapr-cli
 dav1d
+duf
+dust
 duti
 elixir
 elixir-ls
@@ -33,14 +38,17 @@ fzf
 gcc
 gd
 gettext
+gh
 giflib
 git
+git-delta
 glib
 gmp
 gnupg
 gnutls
 go
 graphite2
+gum
 hadolint
 harfbuzz
 heroku
@@ -55,6 +63,7 @@ jsonlint
 julia
 krb5
 langgraph-cli
+less
 libassuan
 libavif
 libblastrampoline
@@ -63,6 +72,7 @@ libevent
 libgcrypt
 libgit2
 libgpg-error
+libiconv
 libidn2
 libksba
 libmpc
@@ -122,6 +132,7 @@ p7zip
 pcre2
 php
 pinentry
+pinentry-mac
 pixman
 pkgconf
 python@3.14
@@ -139,6 +150,7 @@ suite-sparse
 tidy-html5
 tmux
 tree-sitter
+tree-sitter@0.25
 unbound
 unibilium
 unixodbc

@@ -13,6 +13,14 @@ else
     remote_url=$(echo "$remote_url" | sed -e 's/\.git$//')
 fi
 
+# Check for PR associated with current branch using gh CLI
+if command -v gh &> /dev/null; then
+    pr_url=$(gh pr view --json url -q .url 2>/dev/null)
+    if [ -n "$pr_url" ]; then
+        remote_url="$pr_url"
+    fi
+fi
+
 if command -v xdg-open &> /dev/null; then
     xdg-open "$remote_url"  # Linux
 elif command -v open &> /dev/null; then

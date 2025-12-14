@@ -1,0 +1,38 @@
+#!/bin/bash
+
+# Check if in git repo
+if ! git rev-parse --git-dir > /dev/null 2>&1; then
+    gum style --foreground 196 "Error: Not in a git repository"
+    exit 1
+fi
+
+# Pick source branch
+branch=$(git branch -a | sed 's/^[* ]*//' | sed 's/^remotes\///' | gum choose --header "Select branch to cherry-pick from:")
+
+if [ -z "$branch" ]; then
+    gum style --foreground 196 "No branch selected"
+    exit 1
+fi
+
+# Pick two commits from that branch
+commits=$(git log "$branch" --oneline -n 100 | gum choose --limit 2 --header "Select two commits to define range:")
+
+if [ -z "$commits" ]; then
+    gum style --foreground 196 "No commits selected"
+    exit 1
+fi
+
+# Extract SHAs - gum outputs in git log order (newest first)
+mapfile -t shas < <(echo "$commits" | cut -d' ' -f1)
+
+if [ ${#shas[@]} -ne 2 ]; then
+    gum style --foreground 196 "Please select exactly 2 commits"
+    exit 1
+fi
+
+# shas[0] is newer, shas[1] is older (from git log order)
+older="${shas[1]}"
+newer="${shas[0]}"
+
+gum style --foreground 212 "Cherry-picking: $older^..$newer onto $(git branch --show-current)"
+git cherry-pick "$older^..$newer"
