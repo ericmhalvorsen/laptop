@@ -10,13 +10,16 @@
       "Bash(time find:*)",
       "Bash(time mix run:*)",
       "Bash(time du:*)",
-      "Bash(mix test:*)"
+      "Bash(mix test:*)",
+      "mcp__serena__onboarding",
+      "mcp__serena__write_memory",
+      "mcp__serena__think_about_collected_information"
     ],
     "deny": [],
     "ask": []
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "serena"
-  ],
-  "enableAllProjectMcpServers": true
+  ]
 }
