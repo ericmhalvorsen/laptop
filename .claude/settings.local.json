@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mix compile:*)",
+      "Bash(elixir -c:*)",
+      "Bash(mix run:*)",
+      "Bash(cat:*)",
+      "Bash(rsync:*)",
+      "Bash(bin/vault save:*)",
+      "Bash(time find:*)",
+      "Bash(time mix run:*)",
+      "Bash(time du:*)",
+      "Bash(mix test:*)"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "enabledMcpjsonServers": [
+    "serena"
+  ],
+  "enableAllProjectMcpServers": true
+}

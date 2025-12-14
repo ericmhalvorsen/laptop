@@ -9,14 +9,11 @@ erl_crash.dump
 vault-*.tar
 .vault-escript
 
-.claude
-
 # Backup metadata (generated during backup)
 backup-info.txt
 *-backup-*/
 
 .specstory
-.serena
 
 # Legacy shell scripts (kept for reference)
 /legacy/
