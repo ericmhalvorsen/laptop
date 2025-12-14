@@ -30,6 +30,7 @@ version: 1
       :contents:
         - .bashrc
         - .bash_profile
+        - .hushlogin
         - .profile
         - .zlogin
         - .zprofile
@@ -45,6 +46,7 @@ version: 1
         - .cursor
         - .gemini
         - .gitconfig
+        - .gitattributes
         - .local
         - .oh-my-zsh
         - .opencode
