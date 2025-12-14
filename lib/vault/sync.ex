@@ -161,8 +161,20 @@ defmodule Vault.Sync do
           nil
 
         dirs ->
-          File.write("tmp/filelist", Enum.join(dirs, "\n"))
-          "tmp/filelist"
+          filelist_path = System.tmp_dir!() |> Path.join("vault_filelist_#{:rand.uniform(999_999)}")
+          clean_dirs = Enum.map(dirs, fn dir ->
+            dir
+            |> String.trim_trailing("/")
+            |> String.replace_leading("./", "")
+          end)
+
+          if Keyword.get(opts, :verbose, false) do
+            Progress.debug("Filelist contents: #{inspect(clean_dirs)}")
+            Progress.debug("Source directory: #{source}")
+          end
+
+          File.write!(filelist_path, Enum.join(clean_dirs, "\n"))
+          filelist_path
       end
 
     rsync = System.find_executable("rsync")
@@ -203,6 +215,7 @@ defmodule Vault.Sync do
       ])
     else
       System.cmd(rsync, args, stderr_to_stdout: true)
+      |> tap(fn _ -> if file_list && File.exists?(file_list), do: File.rm(file_list) end)
     end
   end
 
@@ -236,7 +249,7 @@ defmodule Vault.Sync do
   end
 
   # Compute the number of files that would be transferred by rsync.
-  defp compute_transfer_count(source, dest, dirs, exclude) do
+  def compute_transfer_count(source, dest, dirs, exclude) do
     case exec_rsync(source, dest,
            exclude: exclude,
            dirs: dirs,

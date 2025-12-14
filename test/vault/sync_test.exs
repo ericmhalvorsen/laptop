@@ -13,7 +13,7 @@ defmodule Vault.SyncTest do
       File.write!(Path.join(source, "file1.txt"), "content1")
       File.write!(Path.join([source, "subdir", "file2.txt"]), "content2")
 
-      assert {:ok, size} = Sync.copy_tree(source, dest)
+      assert {:ok, size, _count} = Sync.copy_tree(source, dest)
       assert is_integer(size)
       assert size > 0
       assert File.read!(Path.join(dest, "file1.txt")) == "content1"
@@ -30,7 +30,7 @@ defmodule Vault.SyncTest do
         File.write!(Path.join(source, ".DS_Store"), "ignore")
         File.write!(Path.join(source, "test.log"), "ignore")
 
-        assert {:ok, _} = Sync.copy_tree(source, dest, exclude: [".DS_Store", "*.log"])
+        assert {:ok, _, _} = Sync.copy_tree(source, dest, exclude: [".DS_Store", "*.log"])
         assert File.exists?(Path.join(dest, "keep.txt"))
         refute File.exists?(Path.join(dest, ".DS_Store"))
         refute File.exists?(Path.join(dest, "test.log"))
@@ -46,7 +46,7 @@ defmodule Vault.SyncTest do
       File.mkdir_p!(source)
       File.write!(Path.join(source, "file.txt"), "content")
 
-      assert {:ok, 0} = Sync.copy_tree(source, dest, dry_run: true)
+      assert {:ok, 0, 0} = Sync.copy_tree(source, dest, dry_run: true)
       refute File.exists?(dest)
     end
 
@@ -54,7 +54,7 @@ defmodule Vault.SyncTest do
       source = Path.join(tmp_dir, "missing")
       dest = Path.join(tmp_dir, "dest")
 
-      assert {:ok, 0} = Sync.copy_tree(source, dest)
+      assert {:ok, 0, 0} = Sync.copy_tree(source, dest)
     end
   end
 
@@ -68,7 +68,7 @@ defmodule Vault.SyncTest do
         File.write!(Path.join(source, "file1.txt"), "content1")
         File.write!(Path.join(source, "file2.txt"), "content2")
 
-        count = Sync.compute_transfer_count(source, dest)
+        count = Sync.compute_transfer_count(source, dest, nil, [])
         assert is_integer(count)
         assert count >= 0
       else
