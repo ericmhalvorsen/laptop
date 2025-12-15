@@ -124,7 +124,7 @@
   format = openpgp
 
 [user]
-  signingkey = C09B5526
+  signingkey = 52BE9538
 
 [push]
   default = current

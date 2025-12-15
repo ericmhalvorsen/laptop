@@ -13,7 +13,7 @@ Elixir-based CLI for backing up/restoring system configurations.
 ```bash
 git clone <your-repo> ~/code/laptop
 cd ~/code/laptop
-./vault restore -v /path/to/backup
+./vault restore -t /path/to/backup
 ```
 
 That's it! The `vault` wrapper automatically:
@@ -43,20 +43,25 @@ mix escript.build
 ```bash
 # Backup system configs to repo + vault data
 ./bin/vault save
-./bin/vault save --vault-path /Volumes/Backup/VaultBackup
+./bin/vault save --vault-target /Volumes/Backup/VaultBackup
+./bin/vault save --vault-target user@host:/backups/vault
 
 # Restore configs only (from this repo)
 ./bin/vault restore
 
 # Restore everything (configs + vault data)
-./bin/vault restore --vault-path ~/VaultBackup
+./bin/vault restore --vault-target ~/VaultBackup
+./bin/vault restore --vault-target user@host:/backups/vault
 
 # Install applications from config/apps.yaml
 ./bin/vault install
 
 # Check backup status
 ./bin/vault status
-./bin/vault status --vault-path ~/VaultBackup
+./bin/vault status --vault-target ~/VaultBackup
+
+# With SSH key for remote targets
+./bin/vault save --vault-target user@host:/backups/vault --ssh-key ~/.ssh/id_rsa
 ```
 
 ## Dotfiles Location

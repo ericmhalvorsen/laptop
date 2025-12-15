@@ -17,14 +17,14 @@ defmodule Vault.Commands.Restore do
 
     State.init_step_stats()
 
-    vault_path = FileUtils.expand_path(opts[:vault_path] || config.vault.dest)
+    vault_target = FileUtils.expand_path(opts[:vault_target] || config.vault.dest)
     dest_path = FileUtils.expand_path(relative_root)
 
     Progress.puts([
       Progress.tag("\n📦 Vault Restore", :cyan),
       "\n\n",
       "Restoring from vault: ",
-      Progress.tag(vault_path, :green),
+      Progress.tag(vault_target, :green),
       "\n",
       "Restoring to: ",
       Progress.tag(dest_path, :green),
@@ -39,7 +39,7 @@ defmodule Vault.Commands.Restore do
 
       execute_step(
         step,
-        Map.put(step_config, :source, Path.join(vault_path, step.name)),
+        Map.put(step_config, :source, Path.join(vault_target, step.name)),
         dest_path,
         Keyword.put(opts, :exclude, excludes)
       )

@@ -10,11 +10,12 @@ defmodule Vault.State do
       current_progress = Map.get(state, id)
 
       # Initialize progress if it doesn't exist
-      current_progress = if current_progress do
-        current_progress
-      else
-        %{current: 0, total: 0}
-      end
+      current_progress =
+        if current_progress do
+          current_progress
+        else
+          %{current: 0, total: 0}
+        end
 
       updated_value = update_func.(current_progress)
       Map.put(state, id, updated_value)

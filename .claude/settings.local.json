@@ -13,7 +13,15 @@
       "Bash(mix test:*)",
       "mcp__serena__onboarding",
       "mcp__serena__write_memory",
-      "mcp__serena__think_about_collected_information"
+      "mcp__serena__think_about_collected_information",
+      "Bash(./bin/vault install:*)",
+      "Bash(mix escript.build:*)",
+      "Bash(./bin/vault save:*)",
+      "Bash(time ./bin/vault install:*)",
+      "Bash(time ./bin/vault save:*)",
+      "mcp__serena__list_memories",
+      "mcp__serena__read_memory",
+      "mcp__serena__edit_memory"
     ],
     "deny": [],
     "ask": []

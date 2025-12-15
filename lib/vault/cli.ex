@@ -17,32 +17,44 @@ defmodule Vault.CLI do
         args,
         strict: [
           config_path: :string,
-          vault_path: :string,
+          vault_target: :string,
+          ssh_key: :string,
           verbose: :boolean,
           dry_run: :boolean,
           help: :boolean,
           only: :string,
+          git_only: :boolean,
+          vault_only: :boolean,
           dev: :boolean
         ],
         aliases: [
           c: :config_path,
           d: :dev,
-          v: :vault_path,
+          t: :vault_target,
+          i: :ssh_key,
           h: :help
         ]
       )
 
     opts =
-      case Keyword.get(opts, :only) do
-        "git" ->
+      cond do
+        Keyword.get(opts, :git_only) == true ->
+          Progress.puts([Progress.tag("Only performing backup to git", :yellow)])
+          opts
+
+        Keyword.get(opts, :vault_only) == true ->
+          Progress.puts([Progress.tag("Only performing backup to vault", :yellow)])
+          opts
+
+        Keyword.get(opts, :only) == "git" ->
           Progress.puts([Progress.tag("Only performing backup to git", :yellow)])
           Keyword.merge(opts, git_only: true)
 
-        "vault" ->
+        Keyword.get(opts, :only) == "vault" ->
           Progress.puts([Progress.tag("Only performing backup to vault", :yellow)])
           Keyword.merge(opts, vault_only: true)
 
-        _ ->
+        true ->
           opts
       end
 
@@ -85,7 +97,7 @@ defmodule Vault.CLI do
       " [options]     Restore from vault\n",
       "  vault ",
       Progress.tag("install", :green),
-      " [options]     Install apps defined in config/apps.yaml\n",
+      " [options]     Bootstrap system from git (packages + dotfiles)\n",
       "  vault ",
       Progress.tag("status", :green),
       " [options]      Show vault status\n",
@@ -94,7 +106,8 @@ defmodule Vault.CLI do
       "                  Show this help\n\n",
       Progress.tag("Options:\n", :yellow),
       "  -c, --config-path PATH      Config file path, default config/vault.yaml\n",
-      "  -v, --vault-path PATH       Vault directory path\n",
+      "  -t, --vault-target TARGET   Vault target (local path or user@host:/path)\n",
+      "  -i, --ssh-key PATH          SSH key for remote vault target\n",
       "  --verbose                   Verbose output\n",
       "  --dry-run                   Dry run (no changes)\n",
       "  --git-only                 Run only git-backed steps (skip vault steps)\n",

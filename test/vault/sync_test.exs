@@ -68,7 +68,7 @@ defmodule Vault.SyncTest do
         File.write!(Path.join(source, "file1.txt"), "content1")
         File.write!(Path.join(source, "file2.txt"), "content2")
 
-        count = Sync.compute_transfer_count(source, dest, nil, [])
+        count = Sync.compute_transfer_count(source, dest, [])
         assert is_integer(count)
         assert count >= 0
       else
