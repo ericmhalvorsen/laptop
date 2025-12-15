@@ -118,7 +118,16 @@ defmodule Vault.Backup do
   def homebrew(dest_dir, opts \\ []) do
     dry_run = Keyword.get(opts, :dry_run, false)
     using_mock = Keyword.has_key?(opts, :cmd)
-    dest_path = fn file -> Path.join([dest_dir, "brew", file]) end
+    is_remote = FileUtils.remote_target?(dest_dir)
+
+    # Use temp dir for remote targets, otherwise write directly
+    work_dir = if is_remote do
+      System.tmp_dir!() |> Path.join("vault-brew-#{:rand.uniform(999999)}")
+    else
+      dest_dir
+    end
+
+    dest_path = fn file -> Path.join([work_dir, "brew", file]) end
     brewfile_path = dest_path.("Brewfile")
 
     case if(using_mock, do: :ok, else: ensure_homebrew_installed()) do
@@ -138,27 +147,46 @@ defmodule Vault.Backup do
                FileUtils.output_file(dest_path.("casks.txt"), casks, dry_run),
              {:ok, _} <-
                FileUtils.output_file(dest_path.("taps.txt"), taps, dry_run) do
-          {:ok, size} = FileUtils.file_size(dest_path.("/"))
 
-          stats = %{
-            brewfile: brewfile_path,
-            formulas: length(formulas),
-            casks: length(casks),
-            taps: length(taps),
-            count: length(taps) + length(casks) + length(formulas),
-            total_size: size
-          }
+          # If remote, sync temp dir to remote target
+          result = if is_remote and !dry_run do
+            case Sync.copy_tree(work_dir, dest_dir, opts) do
+              {:ok, total_size, count} ->
+                File.rm_rf(work_dir)
+                {:ok, total_size, count}
+              error ->
+                File.rm_rf(work_dir)
+                error
+            end
+          else
+            {:ok, size} = FileUtils.file_size(dest_path.("/"))
+            {:ok, size, length(taps) + length(casks) + length(formulas)}
+          end
 
-          {:ok,
-           %{
-             summary: [
-               "    Saved homebrew: \n",
-               "      #{stats[:formulas]} formulas\n",
-               "      #{stats[:casks]} casks\n",
-               "      #{stats[:taps]} taps\n"
-             ],
-             stats: stats
-           }}
+          case result do
+            {:ok, total_size, count} ->
+              stats = %{
+                brewfile: if(is_remote, do: Path.join([dest_dir, "brew", "Brewfile"]), else: brewfile_path),
+                formulas: length(formulas),
+                casks: length(casks),
+                taps: length(taps),
+                count: count,
+                total_size: total_size
+              }
+
+              {:ok,
+               %{
+                 summary: [
+                   "    Saved homebrew: \n",
+                   "      #{stats[:formulas]} formulas\n",
+                   "      #{stats[:casks]} casks\n",
+                   "      #{stats[:taps]} taps\n"
+                 ],
+                 stats: stats
+               }}
+            {:error, _, _} ->
+              {:error, "rsync failed"}
+          end
         else
           {:error, reason} -> {:error, reason}
         end
@@ -188,7 +216,16 @@ defmodule Vault.Backup do
   def apt(dest_dir, opts \\ []) do
     dry_run = Keyword.get(opts, :dry_run, false)
     using_mock = Keyword.has_key?(opts, :cmd)
-    dest_path = fn file -> Path.join([dest_dir, "apt", file]) end
+    is_remote = FileUtils.remote_target?(dest_dir)
+
+    # Use temp dir for remote targets, otherwise write directly
+    work_dir = if is_remote do
+      System.tmp_dir!() |> Path.join("vault-apt-#{:rand.uniform(999999)}")
+    else
+      dest_dir
+    end
+
+    dest_path = fn file -> Path.join([work_dir, "apt", file]) end
 
     case if(using_mock, do: :ok, else: ensure_apt_installed()) do
       {:error, _reason} ->
@@ -203,22 +240,122 @@ defmodule Vault.Backup do
              {:ok, _} <-
                FileUtils.output_file(dest_path.("selections.txt"), selections, dry_run),
              :ok <- backup_apt_sources(dest_path, dry_run) do
-          {:ok, size} = FileUtils.file_size(dest_path.("/"))
 
-          stats = %{
-            packages: length(packages),
-            count: length(packages),
-            total_size: size
-          }
+          # If remote, sync temp dir to remote target
+          result = if is_remote and !dry_run do
+            case Sync.copy_tree(work_dir, dest_dir, opts) do
+              {:ok, total_size, count} ->
+                File.rm_rf(work_dir)
+                {:ok, total_size, count}
+              error ->
+                File.rm_rf(work_dir)
+                error
+            end
+          else
+            {:ok, size} = FileUtils.file_size(dest_path.("/"))
+            {:ok, size, length(packages)}
+          end
 
-          {:ok,
-           %{
-             summary: [
-               "    Saved APT packages: \n",
-               "      #{stats[:packages]} packages\n"
-             ],
-             stats: stats
-           }}
+          case result do
+            {:ok, total_size, count} ->
+              stats = %{
+                packages: length(packages),
+                count: count,
+                total_size: total_size
+              }
+
+              {:ok,
+               %{
+                 summary: [
+                   "    Saved APT packages: \n",
+                   "      #{stats[:packages]} packages\n"
+                 ],
+                 stats: stats
+               }}
+            {:error, _, _} ->
+              {:error, "rsync failed"}
+          end
+        else
+          {:error, reason} -> {:error, reason}
+        end
+    end
+  end
+
+  @doc """
+  Backs up Snap package manager data to the specified destination directory.
+
+  Creates a `snap/` subdirectory in the destination and saves:
+  - packages.txt (list of installed snaps)
+
+  ## Parameters
+
+    * `dest_dir` - Destination directory for the backup
+    * `opts` - Options keyword list
+      * `:dry_run` - Boolean, if true only count packages without writing files
+
+  ## Returns
+
+    * `{:ok, result}` - Success with counts map containing package stats
+    * `{:error, reason}` - Failure with reason
+  """
+  def snap(dest_dir, opts \\ []) do
+    dry_run = Keyword.get(opts, :dry_run, false)
+    using_mock = Keyword.has_key?(opts, :cmd)
+    is_remote = FileUtils.remote_target?(dest_dir)
+
+    # Use temp dir for remote targets, otherwise write directly
+    work_dir = if is_remote do
+      System.tmp_dir!() |> Path.join("vault-snap-#{:rand.uniform(999999)}")
+    else
+      dest_dir
+    end
+
+    dest_path = fn file -> Path.join([work_dir, "snap", file]) end
+
+    case if(using_mock, do: :ok, else: ensure_snap_installed()) do
+      {:error, _reason} ->
+        {:skipped, "Snap not installed"}
+
+      :ok ->
+        with {:ok, packages} <- snap_cmd(["list"], dry_run),
+             {:ok, _} <- FileUtils.ensure_dir(dest_path.("/"), dry_run),
+             {:ok, _} <-
+               FileUtils.output_file(dest_path.("packages.txt"), packages, dry_run) do
+
+          # If remote, sync temp dir to remote target
+          result = if is_remote and !dry_run do
+            case Sync.copy_tree(work_dir, dest_dir, opts) do
+              {:ok, total_size, count} ->
+                File.rm_rf(work_dir)
+                {:ok, total_size, count}
+              error ->
+                File.rm_rf(work_dir)
+                error
+            end
+          else
+            {:ok, size} = FileUtils.file_size(dest_path.("/"))
+            {:ok, size, length(packages)}
+          end
+
+          case result do
+            {:ok, total_size, count} ->
+              stats = %{
+                packages: length(packages),
+                count: count,
+                total_size: total_size
+              }
+
+              {:ok,
+               %{
+                 summary: [
+                   "    Saved Snap packages: \n",
+                   "      #{stats[:packages]} packages\n"
+                 ],
+                 stats: stats
+               }}
+            {:error, _, _} ->
+              {:error, "rsync failed"}
+          end
         else
           {:error, reason} -> {:error, reason}
         end
@@ -370,6 +507,36 @@ defmodule Vault.Backup do
   defmemo dpkg_cmd_path do
     System.find_executable("dpkg") ||
       if(File.exists?("/usr/bin/dpkg"), do: "/usr/bin/dpkg") ||
+      nil
+  end
+
+  defp ensure_snap_installed do
+    case snap_cmd_path() do
+      nil -> {:error, "Snap is not installed"}
+      _path -> :ok
+    end
+  end
+
+  defp snap_cmd(_args, true), do: {:ok, ["dry_run"]}
+
+  defp snap_cmd(args, _) do
+    case System.cmd(snap_cmd_path(), args, stderr_to_stdout: true) do
+      {output, 0} ->
+        packages =
+          output
+          |> String.split("\n", trim: true)
+          |> Enum.drop(1)
+
+        {:ok, packages}
+
+      {error, _code} ->
+        {:error, "Failed to run snap #{inspect(args)}: #{error}"}
+    end
+  end
+
+  defmemo snap_cmd_path do
+    System.find_executable("snap") ||
+      if(File.exists?("/usr/bin/snap"), do: "/usr/bin/snap") ||
       nil
   end
 end

@@ -7,7 +7,17 @@ defmodule Vault.State do
 
   def update_progress(id, update_func) do
     update(fn state ->
-      updated_value = update_func.(Map.get(state, id))
+      current_progress = Map.get(state, id)
+
+      # Initialize progress if it doesn't exist
+      current_progress =
+        if current_progress do
+          current_progress
+        else
+          %{current: 0, total: 0}
+        end
+
+      updated_value = update_func.(current_progress)
       Map.put(state, id, updated_value)
     end)
   end

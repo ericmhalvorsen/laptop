@@ -3,6 +3,15 @@ defmodule Vault.Utils.FileUtils do
   Utility functions for file operations in Vault.
   """
 
+  @doc """
+  Checks if a path is a remote rsync target (e.g., user@host:/path).
+  """
+  def remote_target?(nil), do: false
+
+  def remote_target?(path) when is_binary(path) do
+    String.contains?(path, ":") and not String.starts_with?(path, "/")
+  end
+
   @spec list_files_recursive(
           binary()
           | maybe_improper_list(
@@ -123,6 +132,9 @@ defmodule Vault.Utils.FileUtils do
 
   def expand_path(path, root) when is_binary(path) do
     cond do
+      remote_target?(path) ->
+        path
+
       String.starts_with?(path, "~") ->
         Path.join(System.user_home!(), String.trim_leading(path, "~/"))
 

@@ -16,15 +16,20 @@ defmodule Vault.Commands.Save do
     State.init_step_stats()
 
     git_path = FileUtils.expand_path(config.git.dest)
-    vault_path = FileUtils.expand_path(opts[:vault_path] || config.vault.dest)
+    vault_target = FileUtils.expand_path(opts[:vault_target] || config.vault.dest)
 
     Progress.puts([
       Progress.tag("\n📦 Vault Save", :cyan),
       "\n\n",
       "Backing up vault to: ",
-      Progress.tag(vault_path, :green),
+      Progress.tag(vault_target, :green),
       "\n"
     ])
+
+    # Ensure vault target directory exists
+    unless Keyword.get(opts, :dry_run, false) do
+      ensure_vault_target_exists(vault_target, opts)
+    end
 
     if git_path do
       Progress.puts([
@@ -45,7 +50,7 @@ defmodule Vault.Commands.Save do
           step,
           Map.merge(step_config, %{dest: config.git.dest}),
           relative_root,
-          Keyword.put(opts, :excludes, excludes)
+          opts |> Keyword.put(:excludes, excludes) |> Keyword.put(:delete, false)
         )
       end)
     end
@@ -59,7 +64,7 @@ defmodule Vault.Commands.Save do
 
         execute_step(
           step,
-          Map.put(step_config, :dest, config.vault.dest),
+          Map.put(step_config, :dest, vault_target),
           relative_root,
           Keyword.put(opts, :exclude, excludes)
         )
@@ -89,6 +94,9 @@ defmodule Vault.Commands.Save do
         "apt" ->
           Backup.apt(dest_path, opts)
 
+        "snap" ->
+          Backup.snap(dest_path, opts)
+
         _ ->
           Backup.backup(
             source_path,
@@ -105,11 +113,13 @@ defmodule Vault.Commands.Save do
 
     case result do
       {:ok, result} ->
+        size_label = if FileUtils.remote_target?(dest_path), do: "source ", else: "target "
+
         Progress.puts([
           "  ",
           Progress.tag("✓", :green),
           Progress.tag("   #{result.stats.count} files transferred (", :blue),
-          Progress.tag(["target ", FileUtils.format_size(result.stats.total_size)], :yellow),
+          Progress.tag([size_label, FileUtils.format_size(result.stats.total_size)], :yellow),
           Progress.tag(") \n", :blue)
         ])
 
@@ -177,6 +187,32 @@ defmodule Vault.Commands.Save do
         "\n"
       ])
       |> Progress.puts()
+    end
+  end
+
+  defp ensure_vault_target_exists(vault_target, opts) do
+    if FileUtils.remote_target?(vault_target) do
+      # Extract user@host and path from target
+      [remote, path] = String.split(vault_target, ":", parts: 2)
+
+      ssh_args =
+        case Keyword.get(opts, :ssh_key) do
+          nil -> []
+          key -> ["-i", key]
+        end
+
+      case System.cmd("ssh", ssh_args ++ [remote, "mkdir", "-p", path], stderr_to_stdout: true) do
+        {_output, 0} ->
+          :ok
+
+        {output, _code} ->
+          Progress.error("Failed to create remote vault directory: #{vault_target}")
+          Progress.error(output)
+          System.halt(1)
+      end
+    else
+      # Local target - just create it
+      File.mkdir_p!(vault_target)
     end
   end
 

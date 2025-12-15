@@ -17,6 +17,7 @@ defmodule Vault.Sync do
     * `:delete` - Delete extraneous files from dest (default: false)
     * `:progress_id` - Atom to track progress, enables streaming mode
     * `:dry_run` - If true, only simulate the operation
+    * `:dirs` - List of specific files/dirs to copy (uses --files-from)
   """
   def copy_tree(source, dest, opts \\ []) do
     dry_run = Keyword.get(opts, :dry_run, false)
@@ -72,10 +73,7 @@ defmodule Vault.Sync do
     verbose = Keyword.get(opts, :verbose)
 
     if verbose, do: Progress.debug("Calculating file count")
-
-    count =
-      compute_transfer_count(source, dest, Keyword.get(opts, :dirs), Keyword.get(opts, :exclude))
-
+    count = compute_transfer_count(source, dest, opts)
     if verbose, do: Progress.debug("Calcuated #{count} files to transfer from #{source}")
 
     if count == 0 do
@@ -104,11 +102,11 @@ defmodule Vault.Sync do
 
       port = exec_rsync(source, dest, opts)
 
-      # Track permission errors
       skipped_count = :atomics.new(1, [])
+      error_messages = Agent.start_link(fn -> [] end)
 
       status =
-        stream_rsync_output(port, "", fn lines ->
+        stream_rsync_output(port, "", error_messages, fn lines, err_agent ->
           Enum.reduce(lines, "", fn line, last ->
             cond do
               String.trim(line) == "" ->
@@ -119,6 +117,11 @@ defmodule Vault.Sync do
 
               String.contains?(line, "Operation not permitted") ->
                 :atomics.add(skipped_count, 1, 1)
+                last
+
+              is_error_line?(line) ->
+                {:ok, agent} = err_agent
+                Agent.update(agent, fn msgs -> [line | msgs] end)
                 last
 
               String.ends_with?(line, "/") ->
@@ -141,11 +144,15 @@ defmodule Vault.Sync do
           end)
         end)
 
+      {:ok, agent} = error_messages
+      errors = Agent.get(agent, & &1) |> Enum.reverse()
+      Agent.stop(agent)
+
       skipped = :atomics.get(skipped_count, 1)
 
-      if skipped > 0 do
-        Progress.warn("  Skipped #{skipped} files due to permissions")
-      end
+      if skipped > 0, do: Progress.warn("  Skipped #{skipped} files due to permissions")
+
+      if status == :error and length(errors) > 0, do: show_rsync_errors(errors, source, dest)
 
       {status, count}
     end
@@ -161,8 +168,23 @@ defmodule Vault.Sync do
           nil
 
         dirs ->
-          File.write("tmp/filelist", Enum.join(dirs, "\n"))
-          "tmp/filelist"
+          filelist_path =
+            System.tmp_dir!() |> Path.join("vault_filelist_#{:rand.uniform(999_999)}")
+
+          clean_dirs =
+            Enum.map(dirs, fn dir ->
+              dir
+              |> String.trim_trailing("/")
+              |> String.replace_leading("./", "")
+            end)
+
+          if Keyword.get(opts, :verbose, false) do
+            Progress.debug("Filelist contents: #{inspect(clean_dirs)}")
+            Progress.debug("Source directory: #{source}")
+          end
+
+          File.write!(filelist_path, Enum.join(clean_dirs, "\n"))
+          filelist_path
       end
 
     rsync = System.find_executable("rsync")
@@ -179,6 +201,12 @@ defmodule Vault.Sync do
     stats_arg = if Keyword.get(opts, :stats), do: ["--stats"], else: []
     omit_dir_times_arg = ["--omit-dir-times"]
 
+    ssh_arg =
+      case Keyword.get(opts, :ssh_key) do
+        nil -> []
+        key -> ["-e", "ssh -i #{key}"]
+      end
+
     args =
       dry_run_arg ++
         archive_arg ++
@@ -186,6 +214,7 @@ defmodule Vault.Sync do
         delete_arg ++
         stats_arg ++
         omit_dir_times_arg ++
+        ssh_arg ++
         from_files_arg ++
         exclude_args ++
         ["--out-format=%n", source_arg, dest]
@@ -203,18 +232,19 @@ defmodule Vault.Sync do
       ])
     else
       System.cmd(rsync, args, stderr_to_stdout: true)
+      |> tap(fn _ -> if file_list && File.exists?(file_list), do: File.rm(file_list) end)
     end
   end
 
   # Recursively process rsync output as it appears
-  defp stream_rsync_output(port, buffer, process) do
+  defp stream_rsync_output(port, buffer, error_agent, process) do
     receive do
       {^port, {:data, data}} ->
         chunk = buffer <> data
         {lines, rest} = split_lines(chunk)
 
-        process.(lines)
-        stream_rsync_output(port, rest, process)
+        process.(lines, error_agent)
+        stream_rsync_output(port, rest, error_agent, process)
 
       {^port, {:exit_status, 0}} ->
         :ok
@@ -224,8 +254,7 @@ defmodule Vault.Sync do
         # This is acceptable - we got what we could
         :ok
 
-      {^port, {:exit_status, status}} ->
-        Progress.error("✗ rsync failed with exit code #{status}\n")
+      {^port, {:exit_status, _status}} ->
         :error
     after
       300_000 ->
@@ -235,11 +264,54 @@ defmodule Vault.Sync do
     end
   end
 
+  defp is_error_line?(line) do
+    String.contains?(line, "rsync:") or
+      String.contains?(line, "error:") or
+      String.contains?(line, "failed:") or
+      String.contains?(line, "Permission denied") or
+      String.contains?(line, "Connection") or
+      String.contains?(line, "Host key") or
+      String.contains?(line, "No route to host") or
+      String.contains?(line, "unexpected end of file")
+  end
+
+  defp show_rsync_errors(errors, source, dest) do
+    error_text = Enum.join(errors, "\n")
+
+    cond do
+      String.contains?(error_text, "Permission denied") or
+        String.contains?(error_text, "publickey") or
+          String.contains?(error_text, "Host key verification failed") ->
+        target = if FileUtils.remote_target?(dest), do: dest, else: source
+        Progress.error("Cannot access #{target}: Authentication failed")
+        Progress.error("Check SSH key permissions or use --ssh-key option")
+
+      String.contains?(error_text, "No route to host") or
+        String.contains?(error_text, "Connection refused") or
+          String.contains?(error_text, "Could not resolve hostname") ->
+        target = if FileUtils.remote_target?(dest), do: dest, else: source
+        Progress.error("Cannot connect to #{target}")
+
+      String.contains?(error_text, "unexpected end of file") ->
+        target = if FileUtils.remote_target?(dest), do: dest, else: source
+        Progress.error("Connection to #{target} dropped unexpectedly")
+        Progress.error("This may indicate network issues or the remote rsync process crashed")
+
+      String.contains?(error_text, "No such file or directory") ->
+        Progress.error("Path does not exist: #{source}")
+
+      true ->
+        Progress.error("rsync failed:")
+        errors |> Enum.take(3) |> Enum.each(&Progress.error("  #{&1}"))
+    end
+  end
+
   # Compute the number of files that would be transferred by rsync.
-  defp compute_transfer_count(source, dest, dirs, exclude) do
+  def compute_transfer_count(source, dest, opts) do
     case exec_rsync(source, dest,
-           exclude: exclude,
-           dirs: dirs,
+           exclude: Keyword.get(opts, :exclude),
+           dirs: Keyword.get(opts, :dirs),
+           ssh_key: Keyword.get(opts, :ssh_key),
            delete: false,
            dry_run: true,
            stream: false
@@ -264,20 +336,41 @@ defmodule Vault.Sync do
         |> Enum.reject(&String.ends_with?(&1, "/"))
         |> length()
 
-      {output, _code} ->
-        # Other errors - show them
-        filtered_output =
-          output
-          |> String.split("\n", trim: true)
-          |> Enum.reject(&(&1 == "sending incremental file list"))
-          |> Enum.reject(&String.starts_with?(&1, "rsync"))
-          |> Enum.reject(&String.contains?(&1, "warning:"))
-          |> Enum.reject(&String.contains?(&1, "error:"))
-          |> Enum.reject(&String.ends_with?(&1, "/"))
-          |> Enum.join("\n")
+      {output, exit_code} ->
+        # Other errors - provide specific error messages
+        cond do
+          String.contains?(output, "Permission denied") or
+            String.contains?(output, "publickey") or
+              String.contains?(output, "Host key verification failed") ->
+            target = if FileUtils.remote_target?(dest), do: dest, else: source
+            Progress.error("Cannot access target #{target}: Authentication failed")
+            Progress.error("Check SSH key permissions or use --ssh-key option")
 
-        unless filtered_output == "" do
-          Progress.error("Error computing transfer count")
+          String.contains?(output, "No route to host") or
+            String.contains?(output, "Connection refused") or
+              String.contains?(output, "Could not resolve hostname") ->
+            target = if FileUtils.remote_target?(dest), do: dest, else: source
+            Progress.error("Cannot connect to target #{target}")
+
+          String.contains?(output, "No such file or directory") ->
+            Progress.error("Source path does not exist: #{source}")
+
+          String.contains?(output, "Permission denied") ->
+            Progress.error("Permission denied accessing: #{source}")
+
+          true ->
+            # Show actual error output for unknown errors
+            filtered_output =
+              output
+              |> String.split("\n", trim: true)
+              |> Enum.reject(&(&1 == "sending incremental file list"))
+              |> Enum.take(3)
+              |> Enum.join("\n")
+
+            unless filtered_output == "" do
+              Progress.error("Error accessing target (exit code #{exit_code}):")
+              Progress.error(filtered_output)
+            end
         end
 
         0
@@ -313,14 +406,16 @@ defmodule Vault.Sync do
 
   defp sanitize_detail(_), do: nil
 
-  defp maybe_return_total_size(:ok, _source, dest, dirs, _exclude) when is_list(dirs) do
+  defp maybe_return_total_size(:ok, source, dest, dirs, _exclude) when is_list(dirs) do
+    base_path = if FileUtils.remote_target?(dest), do: source, else: dest
+
     total_size =
       dirs
       |> Enum.map(fn file ->
         clean_file = String.trim_trailing(file, "/")
-        dest_path = Path.join(dest, clean_file)
+        path = Path.join(base_path, clean_file)
 
-        case FileUtils.file_size(dest_path) do
+        case FileUtils.file_size(path) do
           {:ok, size} -> size
           _ -> 0
         end
@@ -330,8 +425,10 @@ defmodule Vault.Sync do
     {:ok, total_size}
   end
 
-  defp maybe_return_total_size(:ok, _source, dest, nil, _exclude) do
-    case FileUtils.file_size(dest) do
+  defp maybe_return_total_size(:ok, source, dest, nil, _exclude) do
+    path = if FileUtils.remote_target?(dest), do: source, else: dest
+
+    case FileUtils.file_size(path) do
       {:ok, size} -> {:ok, size}
       _ -> {:ok, 0}
     end

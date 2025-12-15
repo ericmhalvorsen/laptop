@@ -9,11 +9,11 @@ defmodule Vault.UI.Progress do
 
   @spec enabled? :: boolean()
   def enabled? do
-    System.get_env("DISABLE_VAULT_OUTPUT") != "1"
+    !test?() && System.get_env("DISABLE_VAULT_OUTPUT") != "1"
   end
 
-  @spec test_env? :: boolean()
-  defp test_env? do
+  @spec test? :: boolean()
+  def test? do
     Application.get_env(:vault, :env, :prod) == :test
   end
 
@@ -22,7 +22,7 @@ defmodule Vault.UI.Progress do
   def start_progress(id, label, total) do
     Vault.State.update_progress(id, fn _ -> %{total: total, current: 0} end)
 
-    if enabled?() && !test_env?() && total > 0 do
+    if enabled?() && total > 0 do
       Owl.ProgressBar.start(
         id: id,
         label: label,
@@ -40,7 +40,7 @@ defmodule Vault.UI.Progress do
 
   @spec set_detail(any(), any()) :: :ok
   def set_detail(id, text) do
-    if enabled?() && !test_env?() do
+    if enabled?() do
       safe_text =
         case text do
           bin when is_binary(bin) -> String.slice(bin, 0, 200)
@@ -53,46 +53,41 @@ defmodule Vault.UI.Progress do
     end
   end
 
+  @spec increment(String.t()) :: :ok
   def increment(id) do
     Vault.State.update_progress(id, fn progress ->
       %{progress | current: progress.current + 1}
     end)
 
-    if enabled?() && !test_env?() do
+    if enabled?() do
       Owl.ProgressBar.inc(id: id)
-
-      if Vault.State.progress_finished?(id) do
-        set_detail(id, "")
-      end
+      if Vault.State.progress_finished?(id), do: set_detail(id, "")
     end
 
     :ok
   end
 
+  @spec tag(String.t() | list(String.t()), atom()) :: String.t() | list(String.t())
   def tag(text, color) do
-    cond do
-      !enabled?() || test_env?() ->
-        text
-
-      true ->
-        Owl.Data.tag(text, color)
-    end
+    if enabled?(), do: Owl.Data.tag(text, color), else: text
   end
 
+  @spec puts(any()) :: nil | :ok | any()
   def puts(iodata) do
-    cond do
-      !enabled?() || test_env?() ->
-        IO.puts(iodata)
-
-      true ->
-        Owl.IO.puts(iodata)
+    case enabled?() do
+      false -> if test?(), do: Vault.TestBuffer.write(iodata)
+      true -> Owl.IO.puts(iodata)
     end
+
+    iodata
   end
 
+  @spec info(any()) :: :ok | any()
   def info(messages) do
     [messages] |> List.flatten() |> tag(:cyan) |> puts
   end
 
+  @spec debug(String.t() | list(String.t())) :: list(String.t())
   def debug(messages) do
     [messages]
     |> List.flatten()
@@ -101,25 +96,13 @@ defmodule Vault.UI.Progress do
     |> puts()
   end
 
+  @spec warn(any()) :: :ok | any()
   def warn(messages) do
     [messages] |> List.flatten() |> tag(:yellow) |> puts
   end
 
+  @spec error(any()) :: nil | :ok | any()
   def error(messages) do
     [messages] |> List.flatten() |> tag(:red) |> puts
-  end
-
-  def setup_logger do
-    if enabled?() && !:persistent_term.get({__MODULE__, :logger_setup}, false) do
-      :persistent_term.put({__MODULE__, :logger_setup}, true)
-      _ = :logger.remove_handler(:default)
-
-      :logger.add_handler(:default, :logger_std_h, %{
-        config: %{type: {:device, Owl.LiveScreen}},
-        formatter: Logger.Formatter.new()
-      })
-    else
-      :ok
-    end
   end
 end

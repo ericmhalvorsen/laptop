@@ -69,6 +69,7 @@ alias diff="batdiff"
 alias bathelp="bat --plain --language=help"
 alias uninstall="brew list | gum choose --no-limit | xargs brew uninstall"
 alias please="gum input --password | sudo -nS"
+alias up='source ~/.local/bin/up'
 
 # Conditional paths
 for bin_dir in "$ANTIGRAVITY_BIN" "$PNPM_HOME" "$BUN_BIN" "$WINDSURF_BIN" "$POSTGRES_BIN" "$OPENCODE_BIN" "$NVIM_BIN"; do

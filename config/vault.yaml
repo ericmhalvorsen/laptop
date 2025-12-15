@@ -8,6 +8,9 @@ version: 1
   - :name: apt
     :label: "APT Packages"
 
+  - :name: snap
+    :label: "Snap Packages"
+
   - :name: sensitive
     :label: "SSH Keys, GPG Keys, AWS Keys, Personal Creds"
     :contents:
@@ -68,7 +71,7 @@ version: 1
   - :name: histories
     :label: "Shell Histories"
     :contents:
-      - .*_history
+      - "*history"
 
   - :name: homedirs
     :label: "Home Directories"
@@ -101,6 +104,7 @@ version: 1
   :steps:
     - brew
     - apt
+    - snap
     - scripts
     - dotfiles
 
@@ -108,8 +112,6 @@ version: 1
 :vault:
   :dest: ~/VaultBackup
   :steps:
-    - brew
-    - apt
     - sensitive
     - scripts
     - dotfiles

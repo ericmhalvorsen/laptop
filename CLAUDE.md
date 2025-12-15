@@ -100,4 +100,4 @@ The project builds to an escript at `bin/.vault-escript`. The `bin/vault` bash w
 - State tracking via GenServer for progress reporting
 - Rsync with stats parsing for file operations
 - Graceful handling when package managers (brew/apt) are not installed
-- Options support: `--vault-path`, `--dry-run`, `--verbose`, `--git-only`, `--vault-only`
+- Options support: `--vault-target`, `--ssh-key`, `--dry-run`, `--verbose`, `--git-only`, `--vault-only`

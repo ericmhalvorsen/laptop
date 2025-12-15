@@ -8,7 +8,6 @@ autoconf
 automake
 bat
 brotli
-c-ares
 ca-certificates
 cairo
 certifi
@@ -27,7 +26,6 @@ duti
 elixir
 elixir-ls
 erlang
-expat
 eza
 fd
 fontconfig
@@ -59,7 +57,6 @@ imath
 isl
 jpeg-turbo
 jpeg-xl
-jsonlint
 julia
 krb5
 langgraph-cli
@@ -117,7 +114,6 @@ ncurses
 neovim
 net-snmp
 nettle
-node
 npth
 oniguruma
 openblas64
@@ -142,21 +138,18 @@ regex-opt
 ripgrep
 rtmpdump
 ruby
-simdjson
 sqlite
 starship
 stockfish
 suite-sparse
 tidy-html5
 tmux
-tree-sitter
 tree-sitter@0.25
 unbound
 unibilium
 unixodbc
 usage
 utf8proc
-uvwasi
 vim
 webp
 wget

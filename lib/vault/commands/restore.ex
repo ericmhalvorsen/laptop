@@ -15,17 +15,16 @@ defmodule Vault.Commands.Restore do
     config = Config.load(opts)
     relative_root = config.defaults.relative_root || "~/"
 
-    # Initialize step stats tracking
     State.init_step_stats()
 
-    vault_path = FileUtils.expand_path(opts[:vault_path] || config.vault.dest)
+    vault_target = FileUtils.expand_path(opts[:vault_target] || config.vault.dest)
     dest_path = FileUtils.expand_path(relative_root)
 
     Progress.puts([
       Progress.tag("\n📦 Vault Restore", :cyan),
       "\n\n",
       "Restoring from vault: ",
-      Progress.tag(vault_path, :green),
+      Progress.tag(vault_target, :green),
       "\n",
       "Restoring to: ",
       Progress.tag(dest_path, :green),
@@ -34,20 +33,18 @@ defmodule Vault.Commands.Restore do
 
     excludes = config.defaults.exclude_patterns
 
-    # Restore vault steps in order
     config.vault.steps
     |> Enum.each(fn step ->
       step_config = step |> Map.new() |> Map.delete(:name)
 
       execute_step(
         step,
-        Map.put(step_config, :source, Path.join(vault_path, step.name)),
+        Map.put(step_config, :source, Path.join(vault_target, step.name)),
         dest_path,
         Keyword.put(opts, :exclude, excludes)
       )
     end)
 
-    # Display summary with stats
     display_summary()
   end
 
@@ -56,7 +53,6 @@ defmodule Vault.Commands.Restore do
     dest_path = FileUtils.expand_path(dest_root)
     label = Map.get(step, :label, step.name)
 
-    # Skip if source doesn't exist in vault
     if !File.exists?(source_path) do
       Progress.puts([
         "\n",
@@ -90,7 +86,6 @@ defmodule Vault.Commands.Restore do
 
       runtime_ms = System.monotonic_time(:millisecond) - start_time
 
-      # Wait for render to complete
       if Process.whereis(Owl.LiveScreen), do: Owl.LiveScreen.await_render()
 
       case result do
@@ -103,7 +98,6 @@ defmodule Vault.Commands.Restore do
             Progress.tag(") \n", :blue)
           ])
 
-          # Track stats
           State.add_step_stat(step.name, %{
             label: label,
             count: result.stats.count,

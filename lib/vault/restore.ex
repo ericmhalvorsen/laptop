@@ -210,7 +210,9 @@ defmodule Vault.Restore do
 
                 {:ok,
                  %{
-                   summary: ["Restored APT package selections (run 'apt-get dselect-upgrade' to install)"],
+                   summary: [
+                     "Restored APT package selections (run 'apt-get dselect-upgrade' to install)"
+                   ],
                    stats: %{count: 1, total_size: size}
                  }}
 
@@ -220,6 +222,106 @@ defmodule Vault.Restore do
           end
         end
     end
+  end
+
+  @doc """
+  Restores Snap packages from the specified vault directory.
+
+  Reads the package lists from the vault and uses them to restore snaps.
+
+  ## Parameters
+
+    * `vault_dir` - Vault directory containing the snap/ subdirectory
+    * `opts` - Options keyword list
+      * `:dry_run` - Boolean, if true only show what would be done
+
+  ## Returns
+
+    * `{:ok, result}` - Success with stats map
+    * `{:error, reason}` - Failure with reason
+  """
+  def snap(vault_dir, opts \\ []) do
+    dry_run = Keyword.get(opts, :dry_run, false)
+    using_mock = Keyword.has_key?(opts, :cmd)
+    vault_path = fn file -> Path.join([vault_dir, "snap", file]) end
+    packages_path = vault_path.("packages.txt")
+
+    # Check if Snap is installed
+    case if(using_mock, do: :ok, else: ensure_snap_installed()) do
+      {:error, _reason} ->
+        # Snap not installed, skip gracefully
+        {:ok,
+         %{
+           summary: ["Snap not installed, skipping"],
+           stats: %{count: 0, total_size: 0}
+         }}
+
+      :ok ->
+        if !File.exists?(packages_path) do
+          {:ok,
+           %{
+             summary: ["Snap packages not found in vault, skipping"],
+             stats: %{count: 0, total_size: 0}
+           }}
+        else
+          if dry_run do
+            Progress.puts([
+              "  ",
+              Progress.tag("dry-run:", :light_black),
+              " would restore Snap packages"
+            ])
+
+            {:ok,
+             %{
+               summary: ["Would restore Snap packages"],
+               stats: %{count: 0, total_size: 0}
+             }}
+          else
+            # Read packages and install them
+            packages =
+              File.read!(packages_path)
+              |> String.split("\n", trim: true)
+              |> Enum.reject(&String.starts_with?(&1, "Name"))
+              |> Enum.map(fn line ->
+                line
+                |> String.split(~r/\s+/, parts: 2)
+                |> List.first()
+              end)
+              |> Enum.reject(&is_nil/1)
+              |> Enum.reject(&(&1 == ""))
+
+            success_count = install_snap_packages(packages)
+            {:ok, size} = FileUtils.file_size(vault_path.("/"))
+
+            {:ok,
+             %{
+               summary: [
+                 "Restored #{success_count}/#{length(packages)} Snap packages (check output for failures)"
+               ],
+               stats: %{count: success_count, total_size: size}
+             }}
+          end
+        end
+    end
+  end
+
+  defp install_snap_packages(packages) do
+    Enum.reduce(packages, 0, fn pkg, acc ->
+      case System.cmd("snap", ["install", pkg], stderr_to_stdout: true) do
+        {_output, 0} ->
+          Progress.puts(["  ", Progress.tag("✓", :green), " Installed ", pkg])
+          acc + 1
+
+        {output, _code} ->
+          if String.contains?(output, "already installed") do
+            Progress.puts(["  ", Progress.tag("•", :light_black), " ", pkg, " already installed"])
+            acc + 1
+          else
+            Progress.puts(["  ", Progress.tag("✗", :red), " Failed to install ", pkg])
+            acc
+          end
+      end
+    end)
   end
 
   defp restore_apt_sources(vault_path) do
@@ -271,6 +373,19 @@ defmodule Vault.Restore do
   defmemo apt_cmd_path do
     System.find_executable("apt") ||
       if(File.exists?("/usr/bin/apt"), do: "/usr/bin/apt") ||
+      nil
+  end
+
+  defp ensure_snap_installed do
+    case snap_cmd_path() do
+      nil -> {:error, "Snap is not installed"}
+      _path -> :ok
+    end
+  end
+
+  defmemo snap_cmd_path do
+    System.find_executable("snap") ||
+      if(File.exists?("/usr/bin/snap"), do: "/usr/bin/snap") ||
       nil
   end
 end

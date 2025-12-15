@@ -16,6 +16,7 @@ defmodule Vault.MixProject do
       deps: deps(),
       escript: escript(),
       test_coverage: [tool: ExCoveralls],
+      test_ignore_filters: ["test/support/test_helpers.ex"],
       description: @description,
       authors: [@author]
     ]

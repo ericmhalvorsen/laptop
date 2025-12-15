@@ -42,11 +42,16 @@ mix escript.build        # Build the escript executable
 ./bin/vault status       # Check backup status
 ```
 
-With vault path:
+With vault target (local or remote):
 ```bash
-./bin/vault save --vault-path /path/to/backup
-./bin/vault restore --vault-path /path/to/backup
-./bin/vault status --vault-path /path/to/backup
+./bin/vault save --vault-target /path/to/backup
+./bin/vault save --vault-target user@host:/backups/vault
+./bin/vault restore --vault-target /path/to/backup
+./bin/vault restore --vault-target user@host:/backups/vault
+./bin/vault status --vault-target /path/to/backup
+
+# With SSH key for remote targets
+./bin/vault save --vault-target user@host:/backups/vault --ssh-key ~/.ssh/id_rsa
 ```
 
 ## System Commands (macOS/Darwin)

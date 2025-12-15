@@ -4,47 +4,65 @@ defmodule Vault.Commands.Status do
   """
 
   alias Vault.UI.Progress
+  alias Vault.Utils.FileUtils
 
   def run(_args, opts) do
-    vault_path = get_vault_path(opts)
+    vault_target = get_vault_target(opts)
 
     Progress.puts([
       Progress.tag("\n📊 Vault Status", :cyan),
       "\n\n",
-      "Vault path: ",
-      Progress.tag(vault_path, :yellow),
+      "Vault target: ",
+      Progress.tag(vault_target, :yellow),
       "\n"
     ])
 
-    if File.exists?(vault_path) do
-      show_vault_status(vault_path)
+    if FileUtils.remote_target?(vault_target) do
+      show_remote_vault_status(vault_target)
     else
-      Progress.puts([
-        "\n",
-        Progress.tag("⚠ Vault not found", :yellow),
-        "\n\n",
-        "Run ",
-        Progress.tag("vault save", :cyan),
-        " to create your first backup.\n"
-      ])
+      if File.exists?(vault_target) do
+        show_vault_status(vault_target)
+      else
+        Progress.puts([
+          "\n",
+          Progress.tag("⚠ Vault not found", :yellow),
+          "\n\n",
+          "Run ",
+          Progress.tag("vault save", :cyan),
+          " to create your first backup.\n"
+        ])
+      end
     end
   end
 
-  defp show_vault_status(vault_path) do
+  defp show_vault_status(vault_target) do
     Owl.Box.new([
       Progress.tag("✓ Vault exists", :green),
       "\n\n",
-      "Location: #{vault_path}\n",
+      "Location: #{vault_target}\n",
       "\nThis doesn't do anything right now"
     ])
     |> Progress.puts()
   end
 
-  defp get_vault_path(opts) do
-    opts[:vault_path] || get_default_vault_path()
+  defp show_remote_vault_status(vault_target) do
+    Owl.Box.new([
+      Progress.tag("Remote vault target", :cyan),
+      "\n\n",
+      "Location: #{vault_target}\n",
+      "\nCannot verify remote vault existence from CLI.\n",
+      "Use ",
+      Progress.tag("vault save", :cyan),
+      " to sync to this target."
+    ])
+    |> Progress.puts()
   end
 
-  defp get_default_vault_path do
+  defp get_vault_target(opts) do
+    opts[:vault_target] || get_default_vault_target()
+  end
+
+  defp get_default_vault_target do
     Path.join(System.user_home!(), "VaultBackup")
   end
 end
