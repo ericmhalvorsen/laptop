@@ -1,0 +1,5 @@
+Types: deb
+URIs: https://repositories.intel.com/graphics/ubuntu
+Suites: focal
+Components: main
+Enabled: no

@@ -178,6 +178,7 @@ version: 1
     - com.apple.*
     - docker.sock
     - com.docker.docker
+    - mise
     - networkservices.plist
     - node_modules
     - tmp*

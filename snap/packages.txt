@@ -1,0 +1,17 @@
+bare                       1.0                             5      latest/stable       canonical**    base
+core22                     20251009                        2163   latest/stable       canonical**    base
+core24                     20251009                        1237   latest/stable       canonical**    base
+desktop-security-center    0+git.d93b42d                   99     1/stable/…          canonical**    -
+dust                       v1.1.1                          19     latest/stable       danie.dejager  -
+firefox                    146.0-2                         7477   latest/stable/…     mozilla**      -
+firmware-updater           0+git.0052f6b                   210    1/stable/…          canonical**    -
+gaming-graphics-core24     25.2.2~kisak1~n                 13     kisak-fresh/stable  canonical**    -
+ghostty                    v1.2.3                          436    latest/stable       ken-vandine*   classic
+gnome-42-2204              0+git.837775c-sdk0+git.7b07595  226    latest/stable/…     canonical**    -
+gtk-common-themes          0.1-81-g442e511                 1535   latest/stable/…     canonical**    -
+prompting-client           0+git.d542a5d                   104    1/stable/…          canonical**    -
+snap-store                 0+git.90575829                  1270   2/stable/…          canonical**    -
+snapd                      2.72                            25577  latest/stable       canonical**    snapd
+snapd-desktop-integration  0.9                             315    latest/stable/…     canonical**    -
+steam                      1.0.0.85                        231    latest/stable       canonical**    -
+thunderbird                140.6.0esr-2                    919    latest/stable       canonical**    -
