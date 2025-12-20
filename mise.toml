@@ -1,4 +1,3 @@
 [tools]
-cargo = "latest"
 elixir = "latest"
 erlang = "latest"
