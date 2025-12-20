@@ -20,10 +20,12 @@ version: 1
       - .config/private
 
   - :name: scripts
+    :label: Scripts
     :contents:
       - .local/bin/*
 
   - :name: dotfiles
+    :label: Dotfiles
     :contents:
       - .bashrc
       - .bash_profile
@@ -42,6 +44,7 @@ version: 1
       - .zshenv
 
   - :name: configdirs
+    :label: Config / .dirs
     :contents:
       - .antigravity
       - .bun
@@ -97,7 +100,9 @@ version: 1
 
   - :name: backup
     :label: Everything else
+    :skip_restore: true
     :contents: ~/
+
 # Git backup configuration - which steps to save to git
 :git:
   :dest: ./
@@ -120,8 +125,6 @@ version: 1
     - histories
     - homedirs
     - app_config
-    - backup
-  :restore_skip:
     - backup
 
 :defaults:

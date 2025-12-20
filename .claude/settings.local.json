@@ -21,7 +21,9 @@
       "Bash(time ./bin/vault save:*)",
       "mcp__serena__list_memories",
       "mcp__serena__read_memory",
-      "mcp__serena__edit_memory"
+      "mcp__serena__edit_memory",
+      "Bash(MIX_ENV=prod mix escript.build:*)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": [],
     "ask": []
