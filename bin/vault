@@ -3,8 +3,8 @@
 # Self-bootstrapping Vault wrapper
 #
 # This script ensures all dependencies are installed before running vault.
-# On a fresh macOS system with just bash and curl, this will:
-# 1. Install Homebrew (if needed)
+# On a fresh system with just bash and curl, this will:
+# 1. Install package manager (Homebrew on macOS, uses apt on Ubuntu)
 # 2. Install git, mise (if needed)
 # 3. Build the vault escript (if needed)
 # 4. Run the vault command with all arguments
@@ -24,6 +24,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VAULT_ESCRIPT="$SCRIPT_DIR/.vault-escript"
 RELOAD=false
 
+# Detect OS
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    OS="macos"
+elif [[ -f /etc/debian_version ]] || [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    OS="ubuntu"
+else
+    echo -e "${RED}Error: Unsupported OS. Only macOS and Ubuntu/Debian are supported.${NC}"
+    exit 1
+fi
+
 # Check for --dev flag
 for arg in "$@"; do
     if [ "$arg" = "--dev" ]; then
@@ -40,24 +50,31 @@ if [ ! -f "$VAULT_ESCRIPT" ]; then
     echo -e "${YELLOW}First run detected. Installing dependencies...${NC}"
     echo ""
 
-    if ! command -v brew &> /dev/null; then
-        echo -e "${YELLOW}==> Installing Homebrew${NC}"
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    if [ "$OS" = "macos" ]; then
+        if ! command -v brew &> /dev/null; then
+            echo -e "${YELLOW}==> Installing Homebrew${NC}"
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-        if [ -f "/opt/homebrew/bin/brew" ]; then
-            eval "$(/opt/homebrew/bin/brew shellenv)"
-        elif [ -f "/usr/local/bin/brew" ]; then
-            eval "$(/usr/local/bin/brew shellenv)"
+            if [ -f "/opt/homebrew/bin/brew" ]; then
+                eval "$(/opt/homebrew/bin/brew shellenv)"
+            elif [ -f "/usr/local/bin/brew" ]; then
+                eval "$(/usr/local/bin/brew shellenv)"
+            fi
+            echo ""
+        else
+            echo -e "${GREEN}==> Homebrew already installed${NC}"
+            echo ""
         fi
-        echo ""
-    else
-        echo -e "${GREEN}==> Homebrew already installed${NC}"
-        echo ""
     fi
 
     if ! command -v git &> /dev/null; then
         echo -e "${YELLOW}==> Installing git${NC}"
-        brew install git
+        if [ "$OS" = "macos" ]; then
+            brew install git
+        else
+            sudo apt-get update
+            sudo apt-get install -y git
+        fi
         echo ""
     else
         echo -e "${GREEN}==> git already installed${NC}"
@@ -66,7 +83,12 @@ if [ ! -f "$VAULT_ESCRIPT" ]; then
 
     if ! command -v mise &> /dev/null; then
         echo -e "${YELLOW}==> Installing mise${NC}"
-        brew install mise
+        if [ "$OS" = "macos" ]; then
+            brew install mise
+        else
+            curl https://mise.run | sh
+            export PATH="$HOME/.local/bin:$PATH"
+        fi
         echo ""
     else
         echo -e "${GREEN}==> mise already installed${NC}"
