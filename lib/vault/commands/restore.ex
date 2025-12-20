@@ -53,65 +53,74 @@ defmodule Vault.Commands.Restore do
     dest_path = FileUtils.expand_path(dest_root)
     label = Map.get(step, :label, step.name)
 
-    if !File.exists?(source_path) do
-      Progress.puts([
-        "\n",
-        Progress.tag("→ Skipping #{label}...", :yellow),
-        " (not found in vault)"
-      ])
-    else
-      Progress.puts([
-        "\n",
-        Progress.tag("→ Restoring #{label}...", :cyan)
-      ])
+    cond do
+      Map.get(step, :skip_restore, false) ->
+        Progress.puts([
+          "\n",
+          Progress.tag("→ Skipping #{label}...", :yellow),
+          " (skip_restore: true)"
+        ])
 
-      start_time = System.monotonic_time(:millisecond)
+      !File.exists?(source_path) ->
+        Progress.puts([
+          "\n",
+          Progress.tag("→ Skipping #{label}...", :yellow),
+          " (not found in vault)"
+        ])
 
-      result =
-        case step.name do
-          "brew" ->
-            Restore.homebrew(Path.dirname(source_path), opts)
+      true ->
+        Progress.puts([
+          "\n",
+          Progress.tag("→ Restoring #{label}...", :cyan)
+        ])
 
-          "apt" ->
-            Restore.apt(Path.dirname(source_path), opts)
+        start_time = System.monotonic_time(:millisecond)
 
-          _ ->
-            Restore.restore(
-              source_path,
-              dest_path,
-              config.contents || [],
-              Keyword.put(opts, :label, label)
-            )
+        result =
+          case step.name do
+            "brew" ->
+              Restore.homebrew(Path.dirname(source_path), opts)
+
+            "apt" ->
+              Restore.apt(Path.dirname(source_path), opts)
+
+            _ ->
+              Restore.restore(
+                source_path,
+                dest_path,
+                config.contents || [],
+                Keyword.put(opts, :label, label)
+              )
+          end
+
+        runtime_ms = System.monotonic_time(:millisecond) - start_time
+
+        if Process.whereis(Owl.LiveScreen), do: Owl.LiveScreen.await_render()
+
+        case result do
+          {:ok, result} ->
+            Progress.puts([
+              "  ",
+              Progress.tag("✓", :green),
+              Progress.tag("   #{result.stats.count} files transferred (", :blue),
+              Progress.tag(["source ", FileUtils.format_size(result.stats.total_size)], :yellow),
+              Progress.tag(") \n", :blue)
+            ])
+
+            State.add_step_stat(step.name, %{
+              label: label,
+              count: result.stats.count,
+              total_size: result.stats.total_size,
+              runtime_ms: runtime_ms
+            })
+
+          {:error, reason} ->
+            Progress.puts([
+              "  ",
+              Progress.tag("✗", :red),
+              " Failed: #{reason}"
+            ])
         end
-
-      runtime_ms = System.monotonic_time(:millisecond) - start_time
-
-      if Process.whereis(Owl.LiveScreen), do: Owl.LiveScreen.await_render()
-
-      case result do
-        {:ok, result} ->
-          Progress.puts([
-            "  ",
-            Progress.tag("✓", :green),
-            Progress.tag("   #{result.stats.count} files transferred (", :blue),
-            Progress.tag(["source ", FileUtils.format_size(result.stats.total_size)], :yellow),
-            Progress.tag(") \n", :blue)
-          ])
-
-          State.add_step_stat(step.name, %{
-            label: label,
-            count: result.stats.count,
-            total_size: result.stats.total_size,
-            runtime_ms: runtime_ms
-          })
-
-        {:error, reason} ->
-          Progress.puts([
-            "  ",
-            Progress.tag("✗", :red),
-            " Failed: #{reason}"
-          ])
-      end
     end
   end
 
