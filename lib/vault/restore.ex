@@ -163,9 +163,10 @@ defmodule Vault.Restore do
   def apt(vault_dir, opts \\ []) do
     dry_run = Keyword.get(opts, :dry_run, false)
     using_mock = Keyword.has_key?(opts, :cmd)
+    cmd_fun = Keyword.get(opts, :cmd, &System.cmd/3)
     vault_path = fn file -> Path.join([vault_dir, "apt", file]) end
     selections_path = vault_path.("selections.txt")
-
+    
     # Check if APT is installed
     case if(using_mock, do: :ok, else: ensure_apt_installed()) do
       {:error, _reason} ->
@@ -197,27 +198,26 @@ defmodule Vault.Restore do
                stats: %{count: 0, total_size: 0}
              }}
           else
-            # Restore sources if available
-            restore_apt_sources(vault_path)
+            # Ensure sudo is authenticated once up-front so we can safely run multiple commands.
+            with :ok <- ensure_sudo(cmd_fun),
+                 :ok <- restore_apt_sources(vault_path, cmd_fun),
+                 selections <- File.read!(selections_path),
+                 {:ok, _output} <- dpkg_set_selections(selections, cmd_fun),
+                 {:ok, _output} <- apt_update(cmd_fun),
+                 {:ok, _output} <- apt_dselect_upgrade(cmd_fun) do
+              {:ok, size} = FileUtils.file_size(vault_path.("/"))
 
-            # Restore package selections
-            case System.cmd("dpkg", ["--set-selections"],
-                   stderr_to_stdout: true,
-                   input: File.read!(selections_path)
-                 ) do
-              {_output, 0} ->
-                {:ok, size} = FileUtils.file_size(vault_path.("/"))
+              {:ok,
+               %{
+                 summary: ["Restored APT packages"],
+                 stats: %{count: 1, total_size: size}
+               }}
+            else
+              {:error, reason} when is_binary(reason) ->
+                {:error, reason}
 
-                {:ok,
-                 %{
-                   summary: [
-                     "Restored APT package selections (run 'apt-get dselect-upgrade' to install)"
-                   ],
-                   stats: %{count: 1, total_size: size}
-                 }}
-
-              {error, _code} ->
-                {:error, "Failed to restore APT selections: #{error}"}
+              {:error, reason} ->
+                {:error, reason}
             end
           end
         end
@@ -324,28 +324,226 @@ defmodule Vault.Restore do
     end)
   end
 
-  defp restore_apt_sources(vault_path) do
+  defp restore_apt_sources(vault_path, cmd_fun) do
     sources_file = vault_path.("sources.list")
     sources_dir = vault_path.("sources.list.d")
 
-    # Restore sources.list if it exists (would need sudo, so we just inform the user)
-    if File.exists?(sources_file) do
-      Progress.puts([
-        "  ",
-        Progress.tag("Note:", :yellow),
-        " APT sources found in vault. To restore, run:\n",
-        "  sudo cp #{sources_file} /etc/apt/sources.list"
-      ])
+    backup_dir =
+      if File.exists?(sources_file) or (File.exists?(sources_dir) and File.dir?(sources_dir)) do
+        case backup_apt_sources(cmd_fun) do
+          {:ok, dir} ->
+            Progress.puts([
+              "  ",
+              Progress.tag("✓", :green),
+              " Backed up current APT configuration to #{dir}"
+            ])
+
+            Progress.puts([
+              "  ",
+              Progress.tag("Note:", :yellow),
+              " If APT restore fails, restore your original configuration with:\n",
+              "  sudo cp -a #{dir}/* /etc/apt/"
+            ])
+
+            dir
+
+          {:error, _reason} ->
+            Progress.puts([
+              "  ",
+              Progress.tag("Note:", :yellow),
+              " Could not back up current APT configuration; proceeding without backup"
+            ])
+
+            nil
+        end
+      else
+        nil
+      end
+
+    sources_was_restored =
+      if File.exists?(sources_file) do
+        restore_apt_sources_file(sources_file, cmd_fun)
+      else
+        false
+      end
+
+    dir_was_restored =
+      if File.exists?(sources_dir) and File.dir?(sources_dir) do
+        restore_apt_sources_dir(sources_dir, cmd_fun)
+      else
+        false
+      end
+
+    _ = backup_dir
+
+    if sources_was_restored or dir_was_restored do
+      Progress.puts(["  ", Progress.tag("✓", :green), " Restored APT sources"])
     end
 
-    # Restore sources.list.d if it exists
-    if File.exists?(sources_dir) and File.dir?(sources_dir) do
-      Progress.puts([
-        "  ",
-        Progress.tag("Note:", :yellow),
-        " APT sources.list.d found in vault. To restore, run:\n",
-        "  sudo cp -r #{sources_dir}/* /etc/apt/sources.list.d/"
-      ])
+    :ok
+  end
+
+  defp ensure_sudo(cmd_fun) do
+    case cmd_fun.("sudo", ["-n", "true"], stderr_to_stdout: true) do
+      {_output, 0} ->
+        :ok
+
+      {_output, _code} ->
+        case cmd_fun.("sudo", ["-v"], stderr_to_stdout: true) do
+          {_output, 0} ->
+            :ok
+
+          {output, _code} ->
+            {:error,
+             "sudo authentication failed. If you're running without a TTY (e.g. from a non-interactive runner), run 'sudo -v' in a terminal first, then re-run. Details: #{output}"}
+        end
+    end
+  end
+
+  defp backup_apt_sources(cmd_fun) do
+    timestamp = DateTime.utc_now() |> DateTime.to_iso8601(:basic) |> String.replace(~r/[^0-9]/, "")
+    backup_dir = "/etc/apt/backups/backup_#{timestamp}"
+    
+    # Create backup directory
+    case cmd_fun.("sudo", ["mkdir", "-p", backup_dir], stderr_to_stdout: true) do
+      {_, 0} -> 
+        # Backup sources.list if it exists
+        if File.exists?("/etc/apt/sources.list") do
+          case cmd_fun.("sudo", ["cp", "-a", "/etc/apt/sources.list", "#{backup_dir}/"], stderr_to_stdout: true) do
+            {_, 0} -> :ok
+            _ -> :error
+          end
+        end
+        
+        # Backup sources.list.d if it exists
+        if File.exists?("/etc/apt/sources.list.d") do
+          case cmd_fun.("sudo", ["cp", "-a", "/etc/apt/sources.list.d", "#{backup_dir}/"], stderr_to_stdout: true) do
+            {_, 0} -> :ok
+            _ -> :error
+          end
+        end
+        
+        {:ok, backup_dir}
+        
+      {_error, _} ->
+        Progress.puts([
+          "  ",
+          Progress.tag("!", :yellow),
+          " Failed to create backup directory: #{backup_dir}"
+        ])
+        {:error, :backup_failed}
+    end
+  end
+
+  defp restore_apt_sources_file(sources_file, cmd_fun) do
+    dest = "/etc/apt/sources.list"
+
+    case cmd_fun.("sudo", ["cp", "-a", sources_file, dest], stderr_to_stdout: true) do
+      {_output, 0} ->
+        true
+
+      {output, _code} ->
+        Progress.puts([
+          "  ",
+          Progress.tag("Note:", :yellow),
+          " APT sources found in vault but could not be restored automatically. To restore, run:\n",
+          "  sudo cp #{sources_file} #{dest}\n",
+          "  ",
+          Progress.tag("Reason:", :yellow),
+          " ",
+          output
+        ])
+
+        false
+    end
+  end
+
+  defp restore_apt_sources_dir(sources_dir, cmd_fun) do
+    dest_dir = "/etc/apt/sources.list.d"
+
+    case cmd_fun.("sudo", ["mkdir", "-p", dest_dir], stderr_to_stdout: true) do
+      {_output, 0} ->
+        :ok
+
+      {_output, _code} ->
+        :ok
+    end
+
+    # Copy contents (avoids shell globbing)
+    case cmd_fun.("sudo", ["cp", "-a", sources_dir <> "/.", dest_dir <> "/"], stderr_to_stdout: true) do
+      {_output, 0} ->
+        true
+
+      {output, _code} ->
+        Progress.puts([
+          "  ",
+          Progress.tag("Note:", :yellow),
+          " APT sources.list.d found in vault but could not be restored automatically. To restore, run:\n",
+          "  sudo cp -a #{sources_dir}/. #{dest_dir}/\n",
+          "  ",
+          Progress.tag("Reason:", :yellow),
+          " ",
+          output
+        ])
+
+        false
+    end
+  end
+
+  defp dpkg_set_selections(selections, cmd_fun) do
+    if cmd_fun != &System.cmd/3 do
+      case cmd_fun.("dpkg", ["--set-selections"], stderr_to_stdout: true) do
+        {_output, 0} -> {:ok, ""}
+        {output, _code} -> {:error, "Failed to restore APT selections: #{output}"}
+      end
+    else
+      dpkg = System.find_executable("dpkg") || "dpkg"
+      port =
+        Port.open({:spawn_executable, dpkg}, [
+          :binary,
+          :exit_status,
+          {:args, ["--set-selections"]},
+          :stderr_to_stdout
+        ])
+
+      send(port, {self(), {:command, selections}})
+      send(port, {self(), :close})
+      gather_port_output(port, "Failed to restore APT selections")
+    end
+  end
+
+  defp apt_update(cmd_fun) do
+    case cmd_fun.("sudo", ["apt-get", "update"], stderr_to_stdout: true) do
+      {output, 0} -> {:ok, output}
+      {output, _code} -> {:error, "Failed to run apt-get update: #{output}"}
+    end
+  end
+
+  defp apt_dselect_upgrade(cmd_fun) do
+    case cmd_fun.("sudo", ["apt-get", "-y", "dselect-upgrade"], stderr_to_stdout: true) do
+      {output, 0} -> {:ok, output}
+      {output, _code} -> {:error, "Failed to install APT packages (dselect-upgrade): #{output}"}
+    end
+  end
+
+  defp gather_port_output(port, error_prefix) do
+    gather_port_output(port, error_prefix, "")
+  end
+
+  defp gather_port_output(port, error_prefix, acc) do
+    receive do
+      {^port, {:data, data}} ->
+        gather_port_output(port, error_prefix, acc <> data)
+
+      {^port, {:exit_status, 0}} ->
+        {:ok, acc}
+
+      {^port, {:exit_status, code}} ->
+        {:error, "#{error_prefix}: #{acc} (exit #{code})"}
+    after
+      60_000 ->
+        Port.close(port)
+        {:error, "#{error_prefix}: timed out"}
     end
   end
 
@@ -382,6 +580,7 @@ defmodule Vault.Restore do
       _path -> :ok
     end
   end
+
 
   defmemo snap_cmd_path do
     System.find_executable("snap") ||
