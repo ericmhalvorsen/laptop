@@ -11,6 +11,7 @@ vault-*.tar
 
 # Backup metadata (generated during backup)
 backup-info.txt
+file_list
 *-backup-*/
 
 .specstory
