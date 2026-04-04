@@ -8,7 +8,7 @@ Elixir-based CLI for backing up/restoring system configurations.
 
 ### Quick Start: Fresh System Restore
 
-**On a fresh macOS system with just bash and curl:**
+To restore on a fresh macOS system:
 
 ```bash
 git clone <your-repo> ~/code/laptop
@@ -16,13 +16,11 @@ cd ~/code/laptop
 ./vault restore -t /path/to/backup
 ```
 
-That's it! The `vault` wrapper automatically:
-- Installs Homebrew (if needed)
-- Installs git and mise (if needed)
-- Builds the vault escript (if needed)
-- Runs your command
-
-**Single entry point, zero manual steps.**
+The `vault` wrapper will automatically:
+- Install Homebrew (if needed)
+- Install git and mise (if needed)
+- Build the vault escript (if needed)
+- Run the requested command
 
 ### Development Setup
 
