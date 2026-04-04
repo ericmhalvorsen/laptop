@@ -4,6 +4,7 @@ defmodule Vault.Restore do
   alias Vault.Config
   alias Vault.UI.Progress
   alias Vault.Sync
+  alias Vault.Utils
   alias Vault.Utils.FileUtils
 
   @doc """
@@ -497,7 +498,7 @@ defmodule Vault.Restore do
         {output, _code} -> {:error, "Failed to restore APT selections: #{output}"}
       end
     else
-      dpkg = System.find_executable("dpkg") || "dpkg"
+      dpkg = Utils.dpkg_path() || "dpkg"
       port =
         Port.open({:spawn_executable, dpkg}, [
           :binary,
@@ -548,43 +549,23 @@ defmodule Vault.Restore do
   end
 
   defp ensure_homebrew_installed do
-    case brew_cmd() do
+    case Utils.brew_path() do
       nil -> {:error, "Homebrew is not installed"}
       _path -> :ok
     end
   end
 
   defp ensure_apt_installed do
-    case apt_cmd_path() do
+    case Utils.apt_path() do
       nil -> {:error, "APT is not installed"}
       _path -> :ok
     end
   end
 
-  defmemo brew_cmd do
-    System.find_executable("brew") ||
-      if(File.exists?("/opt/homebrew/bin/brew"), do: "/opt/homebrew/bin/brew") ||
-      if(File.exists?("/usr/local/bin/brew"), do: "/usr/local/bin/brew") ||
-      nil
-  end
-
-  defmemo apt_cmd_path do
-    System.find_executable("apt") ||
-      if(File.exists?("/usr/bin/apt"), do: "/usr/bin/apt") ||
-      nil
-  end
-
   defp ensure_snap_installed do
-    case snap_cmd_path() do
+    case Utils.snap_path() do
       nil -> {:error, "Snap is not installed"}
       _path -> :ok
     end
-  end
-
-
-  defmemo snap_cmd_path do
-    System.find_executable("snap") ||
-      if(File.exists?("/usr/bin/snap"), do: "/usr/bin/snap") ||
-      nil
   end
 end

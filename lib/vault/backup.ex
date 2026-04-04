@@ -4,6 +4,7 @@ defmodule Vault.Backup do
   alias Vault.Config
   alias Vault.UI.Progress
   alias Vault.Sync
+  alias Vault.Utils
   alias Vault.Utils.FileUtils
   alias Vault.State
 
@@ -424,14 +425,14 @@ defmodule Vault.Backup do
   end
 
   defp ensure_homebrew_installed do
-    case brew_cmd() do
+    case Utils.brew_path() do
       nil -> {:error, "Homebrew is not installed"}
       _path -> :ok
     end
   end
 
   defp ensure_apt_installed do
-    case apt_cmd_path() do
+    case Utils.apt_path() do
       nil -> {:error, "APT is not installed"}
       _path -> :ok
     end
@@ -440,7 +441,7 @@ defmodule Vault.Backup do
   defp brew_cmd(_args, true), do: {:ok, ["dry_run"]}
 
   defp brew_cmd(args, _) do
-    case System.cmd(brew_cmd(), args, stderr_to_stdout: true) do
+    case System.cmd(Utils.brew_path(), args, stderr_to_stdout: true) do
       {output, 0} ->
         formulas =
           output
@@ -456,7 +457,7 @@ defmodule Vault.Backup do
   defp apt_cmd(_args, true), do: {:ok, ["dry_run"]}
 
   defp apt_cmd(args, _) do
-    case System.cmd(apt_cmd_path(), args, stderr_to_stdout: true) do
+    case System.cmd(Utils.apt_path(), args, stderr_to_stdout: true) do
       {output, 0} ->
         packages =
           output
@@ -472,7 +473,7 @@ defmodule Vault.Backup do
   defp dpkg_cmd(_args, true), do: {:ok, ["dry_run"]}
 
   defp dpkg_cmd(args, _) do
-    case dpkg_cmd_path() do
+    case Utils.dpkg_path() do
       nil ->
         {:error, "dpkg not found"}
 
@@ -491,27 +492,8 @@ defmodule Vault.Backup do
     end
   end
 
-  defmemo brew_cmd do
-    System.find_executable("brew") ||
-      if(File.exists?("/opt/homebrew/bin/brew"), do: "/opt/homebrew/bin/brew") ||
-      if(File.exists?("/usr/local/bin/brew"), do: "/usr/local/bin/brew") ||
-      nil
-  end
-
-  defmemo apt_cmd_path do
-    System.find_executable("apt") ||
-      if(File.exists?("/usr/bin/apt"), do: "/usr/bin/apt") ||
-      nil
-  end
-
-  defmemo dpkg_cmd_path do
-    System.find_executable("dpkg") ||
-      if(File.exists?("/usr/bin/dpkg"), do: "/usr/bin/dpkg") ||
-      nil
-  end
-
   defp ensure_snap_installed do
-    case snap_cmd_path() do
+    case Utils.snap_path() do
       nil -> {:error, "Snap is not installed"}
       _path -> :ok
     end
@@ -520,7 +502,7 @@ defmodule Vault.Backup do
   defp snap_cmd(_args, true), do: {:ok, ["dry_run"]}
 
   defp snap_cmd(args, _) do
-    case System.cmd(snap_cmd_path(), args, stderr_to_stdout: true) do
+    case System.cmd(Utils.snap_path(), args, stderr_to_stdout: true) do
       {output, 0} ->
         packages =
           output
@@ -534,9 +516,4 @@ defmodule Vault.Backup do
     end
   end
 
-  defmemo snap_cmd_path do
-    System.find_executable("snap") ||
-      if(File.exists?("/usr/bin/snap"), do: "/usr/bin/snap") ||
-      nil
-  end
 end
