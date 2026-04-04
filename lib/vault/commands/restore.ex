@@ -134,9 +134,10 @@ defmodule Vault.Commands.Restore do
       ])
       |> Progress.puts()
     else
-      total_count = Enum.reduce(stats, 0, fn stat, acc -> acc + stat.count end)
-      total_size = Enum.reduce(stats, 0, fn stat, acc -> acc + stat.total_size end)
-      total_time = Enum.reduce(stats, 0, fn stat, acc -> acc + stat.runtime_ms end)
+      {total_count, total_size, total_time} =
+        Enum.reduce(stats, {0, 0, 0}, fn stat, {count, size, time} ->
+          {count + stat.count, size + stat.total_size, time + stat.runtime_ms}
+        end)
 
       step_lines =
         stats
