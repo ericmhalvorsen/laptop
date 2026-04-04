@@ -166,7 +166,7 @@ defmodule Vault.Restore do
     cmd_fun = Keyword.get(opts, :cmd, &System.cmd/3)
     vault_path = fn file -> Path.join([vault_dir, "apt", file]) end
     selections_path = vault_path.("selections.txt")
-    
+
     # Check if APT is installed
     case if(using_mock, do: :ok, else: ensure_apt_installed()) do
       {:error, _reason} ->
@@ -305,23 +305,58 @@ defmodule Vault.Restore do
     end
   end
 
-  defp install_snap_packages(packages) do
-    Enum.reduce(packages, 0, fn pkg, acc ->
-      case System.cmd("snap", ["install", pkg], stderr_to_stdout: true) do
-        {_output, 0} ->
-          Progress.puts(["  ", Progress.tag("✓", :green), " Installed ", pkg])
-          acc + 1
+  defp install_snap_packages([]) do
+    0
+  end
 
-        {output, _code} ->
-          if String.contains?(output, "already installed") do
+  defp install_snap_packages(packages) do
+    case System.cmd("snap", ["install" | packages], stderr_to_stdout: true) do
+      {output, 0} ->
+        # If exit code is 0, all packages were installed (or were already installed) successfully.
+        Enum.each(packages, fn pkg ->
+          if String.contains?(output, "#{pkg} already installed") do
             Progress.puts(["  ", Progress.tag("•", :light_black), " ", pkg, " already installed"])
-            acc + 1
           else
-            Progress.puts(["  ", Progress.tag("✗", :red), " Failed to install ", pkg])
-            acc
+            Progress.puts(["  ", Progress.tag("✓", :green), " Installed ", pkg])
           end
-      end
-    end)
+        end)
+
+        length(packages)
+
+      {_output, _code} ->
+        # If the batch install failed, we could fall back to installing one by one
+        # to ensure we install as many as possible, but batch failure might mean a global issue.
+        # Given we want to maximize restoring, let's just fall back to sequential install.
+        Progress.puts([
+          "  ",
+          Progress.tag("!", :yellow),
+          " Batch install failed, falling back to sequential install..."
+        ])
+
+        Enum.reduce(packages, 0, fn pkg, acc ->
+          case System.cmd("snap", ["install", pkg], stderr_to_stdout: true) do
+            {_output, 0} ->
+              Progress.puts(["  ", Progress.tag("✓", :green), " Installed ", pkg])
+              acc + 1
+
+            {pkg_output, _code} ->
+              if String.contains?(pkg_output, "already installed") do
+                Progress.puts([
+                  "  ",
+                  Progress.tag("•", :light_black),
+                  " ",
+                  pkg,
+                  " already installed"
+                ])
+
+                acc + 1
+              else
+                Progress.puts(["  ", Progress.tag("✗", :red), " Failed to install ", pkg])
+                acc
+              end
+          end
+        end)
+    end
   end
 
   defp restore_apt_sources(vault_path, cmd_fun) do
@@ -401,36 +436,43 @@ defmodule Vault.Restore do
   end
 
   defp backup_apt_sources(cmd_fun) do
-    timestamp = DateTime.utc_now() |> DateTime.to_iso8601(:basic) |> String.replace(~r/[^0-9]/, "")
+    timestamp =
+      DateTime.utc_now() |> DateTime.to_iso8601(:basic) |> String.replace(~r/[^0-9]/, "")
+
     backup_dir = "/etc/apt/backups/backup_#{timestamp}"
-    
+
     # Create backup directory
     case cmd_fun.("sudo", ["mkdir", "-p", backup_dir], stderr_to_stdout: true) do
-      {_, 0} -> 
+      {_, 0} ->
         # Backup sources.list if it exists
         if File.exists?("/etc/apt/sources.list") do
-          case cmd_fun.("sudo", ["cp", "-a", "/etc/apt/sources.list", "#{backup_dir}/"], stderr_to_stdout: true) do
+          case cmd_fun.("sudo", ["cp", "-a", "/etc/apt/sources.list", "#{backup_dir}/"],
+                 stderr_to_stdout: true
+               ) do
             {_, 0} -> :ok
             _ -> :error
           end
         end
-        
+
         # Backup sources.list.d if it exists
         if File.exists?("/etc/apt/sources.list.d") do
-          case cmd_fun.("sudo", ["cp", "-a", "/etc/apt/sources.list.d", "#{backup_dir}/"], stderr_to_stdout: true) do
+          case cmd_fun.("sudo", ["cp", "-a", "/etc/apt/sources.list.d", "#{backup_dir}/"],
+                 stderr_to_stdout: true
+               ) do
             {_, 0} -> :ok
             _ -> :error
           end
         end
-        
+
         {:ok, backup_dir}
-        
+
       {_error, _} ->
         Progress.puts([
           "  ",
           Progress.tag("!", :yellow),
           " Failed to create backup directory: #{backup_dir}"
         ])
+
         {:error, :backup_failed}
     end
   end
@@ -470,7 +512,9 @@ defmodule Vault.Restore do
     end
 
     # Copy contents (avoids shell globbing)
-    case cmd_fun.("sudo", ["cp", "-a", sources_dir <> "/.", dest_dir <> "/"], stderr_to_stdout: true) do
+    case cmd_fun.("sudo", ["cp", "-a", sources_dir <> "/.", dest_dir <> "/"],
+           stderr_to_stdout: true
+         ) do
       {_output, 0} ->
         true
 
@@ -491,13 +535,14 @@ defmodule Vault.Restore do
   end
 
   defp dpkg_set_selections(selections, cmd_fun) do
-    if cmd_fun != &System.cmd/3 do
+    if cmd_fun != (&System.cmd/3) do
       case cmd_fun.("dpkg", ["--set-selections"], stderr_to_stdout: true) do
         {_output, 0} -> {:ok, ""}
         {output, _code} -> {:error, "Failed to restore APT selections: #{output}"}
       end
     else
       dpkg = System.find_executable("dpkg") || "dpkg"
+
       port =
         Port.open({:spawn_executable, dpkg}, [
           :binary,
@@ -580,7 +625,6 @@ defmodule Vault.Restore do
       _path -> :ok
     end
   end
-
 
   defmemo snap_cmd_path do
     System.find_executable("snap") ||
