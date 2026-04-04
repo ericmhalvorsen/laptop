@@ -2,7 +2,7 @@ defmodule Vault.ConfigTest do
   use ExUnit.Case, async: true
   alias Vault.Config
   alias Vault.TestBuffer
-  import Vault.TestHelpers
+
 
   @moduletag :tmp_dir
 
