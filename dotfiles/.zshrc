@@ -8,7 +8,7 @@ export ANTIGRAVITY_BIN="$HOME/.antigravity/bin"
 export OPENCODE_BIN="$HOME/.opencode/bin"
 export NVIM_BIN="/opt/nvim/bin" # ubuntu
 
-export PATH="$PATH:$HOME/bin:/usr/local/bin:$HOME/.local/bin"
+export PATH="$PATH:$HOME/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.local/binlinks"
 
 export ZSH="$HOME/.oh-my-zsh"
 export TERM=xterm
@@ -49,6 +49,8 @@ fre_chpwd() {
 typeset -gaU chpwd_functions
 chpwd_functions+=fre_chpwd
 
+eval "$(zoxide init zsh)"
+
 alias ls="eza -al --icons --git --smart-group --time-style long-iso --no-permissions --links --changed"
 alias tree="eza --tree -al --icons --git --smart-group --time-style long-iso --no-permissions --links --changed"
 alias b="broot"
@@ -64,7 +66,7 @@ alias du="dust"
 alias df="duf"
 alias digs="dig +nocmd "$1" any +multiline +noall +answer | gum filter"
 alias curl="curlie"
-alias cat='bat -P --decorations=auto --color=always'
+alias cat='bat -P --decorations=auto'
 alias diff="batdiff"
 alias bathelp="bat --plain --language=help"
 alias uninstall="brew list | gum choose --no-limit | xargs brew uninstall"
@@ -88,5 +90,8 @@ eval "$(starship init zsh)"
 
 fortune | cowsay | lolcat # greeting
 
+if [[ -n "\$PS1" ]] && [[ -z "\$TMUX" ]] && [[ -n "\$SSH_CONNECTION" ]]; then
+  tmux attach-session -t remote || tmux new-session -s remote
+fi
 
 # TODO: fzf completion options in https://github.com/coderabbitai/dotfiles/blob/master/dot_zshrc

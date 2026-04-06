@@ -16,7 +16,7 @@ defmodule Vault.Commands.Install do
   def run(_args, opts) do
     config = Config.load(opts)
     git_path = File.cwd!()
-    home_dir = System.user_home!()
+    home_dir = config.defaults.relative_root
 
     Progress.puts([
       Progress.tag("\n🚀 Vault Install (Bootstrap)", :cyan),
@@ -40,6 +40,9 @@ defmodule Vault.Commands.Install do
 
     # Restore git steps (dotfiles, scripts, etc)
     restore_git_steps(config, git_path, home_dir, opts)
+
+    # Setup Neovim config
+    setup_nvim(home_dir, opts)
 
     Progress.puts(["\n", Progress.tag("✓ Install complete", :green), "\n"])
   end
@@ -177,6 +180,104 @@ defmodule Vault.Commands.Install do
             to_string(reason)
           ])
       end
+    end
+  end
+
+  defp setup_nvim(home_dir, opts) do
+    dry_run = Keyword.get(opts, :dry_run, false)
+    nvim_config = Path.join(home_dir, ".config/nvim")
+    code_dir = Path.join(home_dir, "code")
+    nvim_repo_dir = Path.join(code_dir, "nvim")
+    nvim_repo_url = "https://github.com/ericmhalvorsen/nvim.git"
+
+    Progress.puts(["\n", Progress.tag("▶ Setting up Neovim config", :cyan), "\n"])
+
+    cond do
+      File.exists?(nvim_config) ->
+        Progress.puts([
+          "  ",
+          Progress.tag("•", :light_black),
+          " Neovim config already exists at ",
+          nvim_config
+        ])
+
+      dry_run ->
+        Progress.puts([
+          "  ",
+          Progress.tag("dry-run:", :light_black),
+          " would clone nvim to ",
+          nvim_repo_dir,
+          " and symlink to ",
+          nvim_config
+        ])
+
+      true ->
+        # Ensure ~/code directory exists
+        unless File.exists?(code_dir) do
+          File.mkdir_p!(code_dir)
+        end
+
+        # Clone repo if it doesn't exist
+        clone_result =
+          if File.exists?(nvim_repo_dir) do
+            :ok
+          else
+            Progress.puts([
+              "  ",
+              Progress.tag("→", :blue),
+              " Cloning nvim config to ",
+              nvim_repo_dir
+            ])
+
+            case System.cmd("git", ["clone", nvim_repo_url, nvim_repo_dir],
+                   stderr_to_stdout: true
+                 ) do
+              {_output, 0} ->
+                Progress.puts([
+                  "  ",
+                  Progress.tag("✓", :green),
+                  " Cloned nvim repository"
+                ])
+
+                :ok
+
+              {output, _code} ->
+                Progress.puts([
+                  "  ",
+                  Progress.tag("✗", :red),
+                  " Failed to clone nvim: ",
+                  String.trim(output)
+                ])
+
+                :error
+            end
+          end
+
+        # Create symlink only if clone succeeded
+        if clone_result == :ok do
+          config_dir = Path.join(home_dir, ".config")
+          File.mkdir_p!(config_dir)
+
+          case File.ln_s(nvim_repo_dir, nvim_config) do
+            :ok ->
+              Progress.puts([
+                "  ",
+                Progress.tag("✓", :green),
+                " Created symlink ",
+                nvim_config,
+                " -> ",
+                nvim_repo_dir
+              ])
+
+            {:error, reason} ->
+              Progress.puts([
+                "  ",
+                Progress.tag("✗", :red),
+                " Failed to create symlink: ",
+                to_string(reason)
+              ])
+          end
+        end
     end
   end
 end

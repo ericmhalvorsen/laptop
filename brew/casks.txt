@@ -1,9 +1,13 @@
 claude
 claude-code
+claude-devtools
+codex
 docker-desktop
 font-sekuya
+gemini
 google-chrome
 ngrok
+postgres-app
 postgres-unofficial
 rio
 rustdesk

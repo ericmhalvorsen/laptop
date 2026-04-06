@@ -2,3 +2,4 @@ charmbracelet/tap
 dapr/tap
 heroku/brew
 specstoryai/tap
+textualize/homebrew

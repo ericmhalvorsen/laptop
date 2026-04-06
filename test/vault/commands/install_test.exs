@@ -4,6 +4,11 @@ defmodule Vault.Commands.InstallTest do
 
   setup :tmp_dir
 
+  setup do
+    Vault.TestBuffer.clear()
+    :ok
+  end
+
   defp write_test_config(path, opts) do
     home = opts[:home] || "~/"
     git_dest = opts[:git_dest] || "./"
@@ -224,6 +229,137 @@ defmodule Vault.Commands.InstallTest do
       assert output =~ "Install complete"
       # Should skip all steps gracefully
       assert output =~ "Skipping" or output =~ "not found"
+    after
+      File.cd!(original_dir)
+    end
+  end
+
+  @tag timeout: 120_000
+  test "sets up nvim when config doesn't exist", %{tmp_dir: tmp} do
+    git_dir = Path.join(tmp, "git-repo")
+    home = Path.join(tmp, "home")
+    File.mkdir_p!(home)
+    File.mkdir_p!(git_dir)
+
+    config_path = Path.join(git_dir, "config/vault.yaml")
+    write_test_config(config_path, home: home, git_dest: git_dir)
+
+    original_dir = File.cwd!()
+    File.cd!(git_dir)
+
+    try do
+      Vault.Commands.Install.run([], config_path: config_path)
+      output = Vault.TestBuffer.get()
+
+      assert output =~ "Setting up Neovim config"
+      assert output =~ "Cloning nvim config"
+      assert output =~ "Created symlink"
+
+      # Verify directories and symlink were created
+      assert File.exists?(Path.join(home, "code"))
+      assert File.exists?(Path.join([home, "code", "nvim"]))
+      assert File.exists?(Path.join([home, ".config", "nvim"]))
+
+      # Verify it's a symlink pointing to the right place
+      {:ok, link_target} = File.read_link(Path.join([home, ".config", "nvim"]))
+      assert link_target == Path.join([home, "code", "nvim"])
+    after
+      File.cd!(original_dir)
+    end
+  end
+
+  @tag timeout: 120_000
+  test "skips nvim setup when config already exists", %{tmp_dir: tmp} do
+    git_dir = Path.join(tmp, "git-repo")
+    home = Path.join(tmp, "home")
+    File.mkdir_p!(home)
+    File.mkdir_p!(git_dir)
+
+    # Create existing nvim config
+    nvim_config = Path.join([home, ".config", "nvim"])
+    File.mkdir_p!(nvim_config)
+    File.write!(Path.join(nvim_config, "init.lua"), "-- existing config")
+
+    config_path = Path.join(git_dir, "config/vault.yaml")
+    write_test_config(config_path, home: home, git_dest: git_dir)
+
+    original_dir = File.cwd!()
+    File.cd!(git_dir)
+
+    try do
+      Vault.Commands.Install.run([], config_path: config_path)
+      output = Vault.TestBuffer.get()
+
+      assert output =~ "Setting up Neovim config"
+      assert output =~ "Neovim config already exists"
+
+      # Should not have created ~/code/nvim
+      refute File.exists?(Path.join([home, "code", "nvim"]))
+    after
+      File.cd!(original_dir)
+    end
+  end
+
+  @tag timeout: 120_000
+  test "nvim setup respects dry-run mode", %{tmp_dir: tmp} do
+    git_dir = Path.join(tmp, "git-repo")
+    home = Path.join(tmp, "home")
+    File.mkdir_p!(home)
+    File.mkdir_p!(git_dir)
+
+    config_path = Path.join(git_dir, "config/vault.yaml")
+    write_test_config(config_path, home: home, git_dest: git_dir)
+
+    original_dir = File.cwd!()
+    File.cd!(git_dir)
+
+    try do
+      Vault.Commands.Install.run([], config_path: config_path, dry_run: true)
+      output = Vault.TestBuffer.get()
+
+      assert output =~ "Setting up Neovim config"
+      assert output =~ "dry-run:"
+      assert output =~ "would clone nvim"
+
+      # Should not actually create anything
+      refute File.exists?(Path.join([home, "code", "nvim"]))
+      refute File.exists?(Path.join([home, ".config", "nvim"]))
+    after
+      File.cd!(original_dir)
+    end
+  end
+
+  @tag timeout: 120_000
+  test "creates symlink when nvim repo exists but symlink doesn't", %{tmp_dir: tmp} do
+    git_dir = Path.join(tmp, "git-repo")
+    home = Path.join(tmp, "home")
+    File.mkdir_p!(home)
+    File.mkdir_p!(git_dir)
+
+    # Pre-create the nvim repo directory
+    nvim_repo = Path.join([home, "code", "nvim"])
+    File.mkdir_p!(nvim_repo)
+    File.write!(Path.join(nvim_repo, "init.lua"), "-- test config")
+
+    config_path = Path.join(git_dir, "config/vault.yaml")
+    write_test_config(config_path, home: home, git_dest: git_dir)
+
+    original_dir = File.cwd!()
+    File.cd!(git_dir)
+
+    try do
+      Vault.Commands.Install.run([], config_path: config_path)
+      output = Vault.TestBuffer.get()
+
+      assert output =~ "Setting up Neovim config"
+      # Should skip cloning since repo already exists
+      refute output =~ "Cloning nvim config"
+      assert output =~ "Created symlink"
+
+      # Verify symlink was created
+      assert File.exists?(Path.join([home, ".config", "nvim"]))
+      {:ok, link_target} = File.read_link(Path.join([home, ".config", "nvim"]))
+      assert link_target == nvim_repo
     after
       File.cd!(original_dir)
     end
