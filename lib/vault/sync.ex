@@ -35,7 +35,7 @@ defmodule Vault.Sync do
 
         {:ok, 0, 0}
 
-      not File.exists?(source) ->
+      not FileUtils.remote_target?(source) and not File.exists?(source) ->
         {:ok, 0, 0}
 
       available?() ->

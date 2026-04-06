@@ -96,31 +96,39 @@ defmodule Vault.Utils.FileUtils do
   def expand_contents(contents, root) when is_binary(root) do
     expanded_root = expand_path(root)
 
-    contents
-    |> normalize_contents()
-    |> Enum.flat_map(fn entry ->
-      case String.contains?(entry, "*") do
-        true ->
-          pattern =
-            if Path.type(entry) == :absolute do
-              entry
-            else
-              Path.join(expanded_root, entry)
-            end
+    if remote_target?(expanded_root) do
+      # For remote targets, we can't use Path.wildcard() or File.dir?()
+      # so return the contents as-is (globs are not supported for remote roots)
+      contents
+      |> normalize_contents()
+      |> Enum.uniq()
+    else
+      contents
+      |> normalize_contents()
+      |> Enum.flat_map(fn entry ->
+        case String.contains?(entry, "*") do
+          true ->
+            pattern =
+              if Path.type(entry) == :absolute do
+                entry
+              else
+                Path.join(expanded_root, entry)
+              end
 
-          pattern
-          |> Path.wildcard()
-          |> Enum.map(&Path.relative_to(&1, expanded_root))
+            pattern
+            |> Path.wildcard()
+            |> Enum.map(&Path.relative_to(&1, expanded_root))
 
-        false ->
-          entry
-          |> expand_path(expanded_root)
-          |> Path.wildcard()
-          |> Enum.map(&Path.relative_to(&1, expanded_root))
-      end
-    end)
-    |> Enum.uniq()
-    |> Enum.map(&append_slash_if_dir(&1, expanded_root))
+          false ->
+            entry
+            |> expand_path(expanded_root)
+            |> Path.wildcard()
+            |> Enum.map(&Path.relative_to(&1, expanded_root))
+        end
+      end)
+      |> Enum.uniq()
+      |> Enum.map(&append_slash_if_dir(&1, expanded_root))
+    end
   end
 
   @spec expand_path(nil | binary(), nil | binary()) :: nil | binary()
