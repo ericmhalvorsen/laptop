@@ -61,7 +61,7 @@ defmodule Vault.Commands.Restore do
           " (skip_restore: true)"
         ])
 
-      !File.exists?(source_path) ->
+      !FileUtils.remote_target?(source_path) and !File.exists?(source_path) ->
         Progress.puts([
           "\n",
           Progress.tag("→ Skipping #{label}...", :yellow),

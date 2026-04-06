@@ -12,6 +12,7 @@ defmodule Vault.Commands.Install do
   alias Vault.Restore
   alias Vault.UI.Progress
   alias Vault.Sync
+  alias Vault.Utils.FileUtils
 
   def run(_args, opts) do
     config = Config.load(opts)
@@ -158,7 +159,9 @@ defmodule Vault.Commands.Install do
         home_dir
       ])
     else
-      case Sync.copy_tree(step_dir, home_dir, dry_run: false, delete: false, dirs: contents) do
+      expanded_contents = FileUtils.expand_contents(contents, step_dir)
+
+      case Sync.copy_tree(step_dir, home_dir, dry_run: false, delete: false, dirs: expanded_contents) do
         {:ok, _size, count} ->
           Progress.puts([
             "  ",
