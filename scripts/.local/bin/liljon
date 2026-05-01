@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+
+BATTERY_SLEEP=5
+MAX_SECONDS=$((2 * 60 * 60))
+
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+    _b=$'\033[1m'
+    _d=$'\033[2m'
+    _n=$'\033[0m'
+    _c=$'\033[36m'
+    _g=$'\033[32m'
+    _m=$'\033[35m'
+    _y=$'\033[33m'
+    _w=$'\033[97m'
+else
+    _b=_d=_n=_c=_g=_m=_y=_w=''
+fi
+
+_restored=0
+
+hr() {
+    printf '%s\n' "${_c}╭──────────────────────────────────────────────────────╮${_n}"
+}
+
+hr_bot() {
+    printf '%s\n' "${_c}╰──────────────────────────────────────────────────────╯${_n}"
+}
+
+line() {
+    printf '%s\n' "${_c}│${_n} $1"
+}
+
+enable_sleep() {
+    [[ $_restored -eq 1 ]] && return
+    _restored=1
+
+    [[ ${1:-1} -eq 1 ]] && echo
+    echo
+    hr
+    line "${_g}${_b}All set.${_n} Power settings are back to normal."
+    hr_bot
+    echo
+    printf '%s\n' "${_d}  Battery sleep → ${_w}${BATTERY_SLEEP} min${_n}"
+
+    sudo pmset -b disablesleep 0
+    sudo pmset -b sleep "$BATTERY_SLEEP"
+
+    if [[ ${1:--1} -eq 1 ]]; then
+        printf '\n%s\n' "${_m}  Drifting off…${_n}"
+        sudo pmset sleepnow
+    else
+        printf '\n%s\n' "${_y}  Stay cozy. ${_d}(You can close the lid whenever you like.)${_n}"
+    fi
+}
+
+prevent_sleep() {
+    [[ -t 1 ]] && clear 2>/dev/null || true
+    echo
+    hr
+    line "${_w}${_b}Fire up that loud, another round of shots${_n}"
+    hr_bot
+    echo
+    printf '%s\n' "    ${_m}🥂${_n}"
+    echo
+    printf '%s\n' "  ${_c}◆${_n}  Lid closed? It will ${_b}stay awake${_n} for up to ${_y}2 hours${_n}."
+    printf '%s\n' "  ${_c}◆${_n}  ${_d}Press Enter anytime to hand sleep back to the system.${_n}"
+    echo
+    printf '%s\n' "${_d}  Applying power settings…${_n}"
+    sudo pmset -b disablesleep 1
+    sudo pmset -b sleep 0
+    echo
+    printf '%s\n' "${_g}  ${_b}Done.${_n} ${_g}You are free to work (or don't). Waiting for Enter…${_n}"
+    echo
+}
+
+trap 'enable_sleep 0; exit 130' INT
+
+prevent_sleep
+
+if read -r -t "$MAX_SECONDS"; then
+    enable_sleep 0
+else
+    enable_sleep 1
+fi

@@ -42,13 +42,6 @@ zstyle ':completion:*:*:git:*' script ~/.zsh/git-completion.bash
 source ~/.zsh/fzf.zsh
 export FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude .git'
 
-# fre (frequency tracker)
-fre_chpwd() {
-  fre --add "$(pwd)"
-}
-typeset -gaU chpwd_functions
-chpwd_functions+=fre_chpwd
-
 eval "$(zoxide init zsh)"
 
 alias ls="eza -al --icons --git --smart-group --time-style long-iso --no-permissions --links --changed"
