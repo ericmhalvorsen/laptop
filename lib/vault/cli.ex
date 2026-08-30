@@ -61,10 +61,17 @@ defmodule Vault.CLI do
     case {command_and_args, invalid, opts[:help]} do
       {_, _, true} -> :help
       {[], _, _} -> :help
-      {[command | rest], [], _} -> {String.to_atom(command), rest, opts}
+      {[command | rest], [], _} -> {parse_command(command), rest, opts}
       {_, invalid, _} -> {:error, "Invalid options: #{inspect(invalid)}"}
     end
   end
+
+  defp parse_command("save"), do: :save
+  defp parse_command("restore"), do: :restore
+  defp parse_command("install"), do: :install
+  defp parse_command("status"), do: :status
+  defp parse_command("help"), do: :help
+  defp parse_command(_), do: :unknown
 
   defp process_command(:help), do: print_help()
   defp process_command({:save, args, opts}), do: Vault.Commands.Save.run(args, opts)
